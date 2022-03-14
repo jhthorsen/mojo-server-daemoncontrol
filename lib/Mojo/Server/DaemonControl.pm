@@ -32,9 +32,9 @@ sub check_pid ($self) {
 }
 
 sub ensure_pid_file ($self, $pid) {
-  return 1 if -s (my $file = $self->pid_file);
+  return $self if -s (my $file = $self->pid_file);
   $self->log->info("Writing pid $pid to @{[$self->pid_file]}");
-  return $file->spurt("$pid\n")->chmod(0644) && 1;
+  return $file->spurt("$pid\n")->chmod(0644) && $self;
 }
 
 sub run ($self, $app) {
@@ -130,3 +130,161 @@ sub DESTROY ($self) {
 }
 
 1;
+
+=encoding utf8
+
+=head1 NAME
+
+Mojo::Server::DaemonControl - A Mojolicious daemon manager
+
+=head1 SYNOPSIS
+
+=head2 Commmand line
+
+  $ mojodctl --workers 4 --listen 'http://*:8080' /path/to/my-mojo-app.pl;
+
+=head2 Perl API
+
+  use Mojo::Server::DaemonControl;
+  my $listen = Mojo::URL->new('http://*:8080');
+  my $dctl   = Mojo::Server::DaemonControl->new(listen => [$listen], workers => 4);
+
+  $dctl->run('/path/to/my-mojo-app.pl');
+
+=head1 DESCRIPTION
+
+L<Mojo::Server::DaemonControl> is not a web server. Instead it manages one or
+more L<Mojo::Server::Daemon> processes that can handle web requests. Each of
+these servers are started with L<SO_REUSEPORT|Mojo::Server::Daemon/reuse>
+enabled.
+
+This means it is only supported on systems that support
+L<SO_REUSEPORT|https://lwn.net/Articles/542629/>. It also does not support fork
+emulation. It should work on most modern Linux based systems though.
+
+This server is an alternative to L<Mojo::Server::Hypnotoad> where each of the
+workers handle long running (WebSocket) requests. The main difference is that a
+hot reload will simply start new workers, instead of restarting the manager.
+This is useful if you need/want to deploy a new version of your server during
+the L</graceful_timeout>. Normally this is not something you would need, but in
+some cases where the graceful timeout and long running requests last for
+several hours or even days, then it might come in handy to let the old
+code run, while new processes are deployed.
+
+=head1 SIGNALS
+
+=head2 INT, TERM
+
+Shut down server immediately.
+
+=head2 QUIT
+
+Shut down server gracefully.
+
+=head2 TTIN
+
+Increase worker pool by one.
+
+=head2 TTOU
+
+Decrease worker pool by one.
+
+=head2 USR2
+
+TODO: Zero downtime software upgrade.
+
+=head1 ATTRIBUTES
+
+L<Mojo::Server::DaemonControl> inherits all attributes from
+L<Mojo::EventEmitter> and implements the following ones.
+
+=head2 graceful_timeout
+
+  $timeout = $dctl->graceful_timeout;
+  $dctl    = $dctl->graceful_timeout(120);
+
+TODO
+
+=head2 listen
+
+  $array_ref = $dctl->listen;
+  $dctl      = $dctl->listen([Mojo::URL->new]);
+
+An array-ref of L<Mojo::URL> objects for what to listen to. See
+L<Mojo::Server::Daemon/listen> for supported values.
+
+The C<reuse=1> query parameter will be added automatically before starting the
+L<Mojo::Server::Daemon> sub process.
+
+=head2 log
+
+  $log  = $dctl->log;
+  $dctl = $dctl->log(Mojo::Log->new);
+
+A L<Mojo::Log> object used for logging.
+
+=head2 pid_file
+
+  $file = $dctl->pid_file;
+  $dctl = $dctl->pid_file(Mojo::File->new);
+
+A L<Mojo::File> object with the path to the pid file.
+
+=head2 workers
+
+  $int  = $dctl->workers;
+  $dctl = $dctl->workers(4);
+
+Number of worker processes, defaults to 4. See L<Mojo::Server::Prefork/workers>
+for more details.
+
+=head1 METHODS
+
+L<Mojo::Server::DaemonControl> inherits all methods from
+L<Mojo::EventEmitter> and implements the following ones.
+
+=head2 check_pid
+
+  $int = $dctl->check_pid;
+
+Returns the PID of the running process documented in L</pid_file> or zero (0)
+if is is not running.
+
+=head2 ensure_pid_file
+
+  $dctl->ensure_pid_file;
+
+Makes sure L</pid_file> exists and contains the current PID.
+
+=head2 run
+
+  $dctl->run($app);
+
+Run the menager and wait for L</SIGNALS>. Note that C<$app> is not loaded in
+the manager process, which means that each worker does not share any code or
+memory.
+
+=head2 stop
+
+  $dctl->stop($signal);
+
+Used to stop the running manager and any L</workers> with the C<$signal> INT,
+QUIT or TERM (default).
+
+=head1 AUTHOR
+
+Jan Henning Thorsen
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) Jan Henning Thorsen
+
+This program is free software, you can redistribute it and/or modify it under
+the terms of the Artistic License version 2.0.
+
+=head1 SEE ALSO
+
+L<Mojo::Server::Daemon>, L<Mojo::Server::Hypnotoad>,
+L<Mojo::Server::DaemonControl::Worker>.
+
+=cut
