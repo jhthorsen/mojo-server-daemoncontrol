@@ -2,13 +2,20 @@ package Mojo::Server::DaemonControl;
 use Mojo::Base 'Mojo::EventEmitter', -signatures;
 
 use File::Spec::Functions qw(tmpdir);
-use Mojo::File qw(path);
+use Mojo::File qw(curfile path);
 use Mojo::Log;
 use Mojo::URL;
 use Mojo::Util qw(steady_time);
 use POSIX qw(WNOHANG);
 use Scalar::Util qw(weaken);
 use Time::HiRes qw(sleep);
+
+# This should be considered internal for now
+our $MOJODCTL = do {
+  my $x = $0 =~ m!\bmojodctl$! && -x $0 ? $0 : $ENV{MOJODCTL_BINARY};
+  $x ||= curfile->dirname->dirname->dirname->dirname->child(qw(script mojodctl));
+  -x $x ? $x : 'mojodctl';
+};
 
 has graceful_timeout => 120;
 has listen           => sub ($self) { [Mojo::URL->new('http://*:8080')] };
@@ -79,6 +86,7 @@ sub _manage ($self, $app) {
     # Stop running workers
     $self->log->debug(sprintf 'kill %s %s == %s', $signal, $_, kill $signal => $_)
       for keys %{$self->{pool}};
+    sleep 1;
   }
   else {
     # Make sure we have enough workers and a pid file
@@ -102,7 +110,9 @@ sub _spawn ($self, $app) {
   return $self->emit(spawn => $pid)->{pool}{$pid} = {time => steady_time} if $pid;
 
   # Child
-  exec $^X => $app => daemon => @args;
+  $ENV{MOJO_SERVER_DAEMON_MANAGER_CLASS} = 'Mojo::Server::DaemonControl::Worker';
+  $self->log->debug("Exec $^X $MOJODCTL $app daemon @args");
+  exec $^X, $MOJODCTL => $app => daemon => @args;
   die "Could not exec $app: $!";
 }
 

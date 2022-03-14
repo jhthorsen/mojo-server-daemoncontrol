@@ -6,7 +6,7 @@ use Mojo::Server::DaemonControl;
 my $app = curfile->dirname->child(qw(t no-such-app.pl))->to_abs->to_string;
 
 subtest 'signals - stop' => sub {
-  my $dctl = Mojo::Server::DaemonControl->new(workers => 0);
+  my $dctl = dctl(workers => 0);
   my @stop;
   for my $sig (qw(INT QUIT TERM)) {
     $dctl->once(stop  => sub { push @stop, $_[1] });
@@ -18,7 +18,7 @@ subtest 'signals - stop' => sub {
 };
 
 subtest 'signals - workers' => sub {
-  my $dctl = Mojo::Server::DaemonControl->new;
+  my $dctl = dctl();
   $dctl->once(
     start => sub {
       my $dctl = shift;
@@ -43,12 +43,24 @@ subtest 'signals - workers' => sub {
 };
 
 subtest 'signals - reap' => sub {
-  my $dctl = Mojo::Server::DaemonControl->new(workers => 0);
-  my @reap;
-  $dctl->once(reap => sub { push @reap, $_[1]; shift->stop });
-  $dctl->once(start => sub { my $pid = fork; die $! unless defined $pid; exit unless $pid; });
+  my $dctl = dctl(workers => 0);
+  my ($running, @reap) = (1);
+  $dctl->once(reap => sub { push @reap, $_[1]; $running = 0 });
+  $dctl->once(
+    start => sub {
+      die "Can't fork: $!" unless defined(my $pid = fork);
+      exit                 unless $pid;
+      1 while $running;
+    }
+  );
   $dctl->run($app);
   is int @reap, 1, 'reaped';
 };
 
 done_testing;
+
+sub dctl {
+  my $dctl = Mojo::Server::DaemonControl->new(@_);
+  $dctl->on(start => sub { delete shift->{running} });
+  return $dctl;
+}

@@ -1,0 +1,39 @@
+#!/usr/bin/env perl
+use Mojo::Base -strict;
+
+use Mojo::Util qw(extract_usage getopt);
+
+getopt
+  'h|help'     => \my $help,
+  'l|listen=s' => \my @listen,
+  'm|mode=s'   => \$ENV{MOJO_MODE};
+
+die extract_usage if $help || !(my $app = shift);
+
+my $class = $ENV{MOJO_SERVER_DAEMON_MANAGER_CLASS} || 'Mojo::Server::DaemonControl';
+die $@ unless eval "require $class; 1";
+
+my $obj = $class->new;
+$obj->listen([map { Mojo::URL->new($_) } @listen]) if @listen;
+$obj->run($app);
+
+=encoding utf8
+
+=head1 NAME
+
+=head1 SYNOPSIS
+
+  Usage: mojodctcl [OPTIONS] [APPLICATION]
+
+    mojodctcl ./script/my_app
+    mojodctcl -m production -l -l http://127.0.0.1:3000 ./myapp.pl
+
+  Options:
+    -h, --help                     Show this message
+    -l, --listen <location>        One or more locations you want to listen on,
+                                   defaults to the value of MOJO_LISTEN or
+                                   "http://*:3000"
+    -m, --mode <name>              Operating mode for your application,
+                                   defaults to the value of
+                                   MOJO_MODE/PLACK_ENV or "development"
+=cut
