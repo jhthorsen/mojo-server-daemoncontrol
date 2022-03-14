@@ -5,7 +5,6 @@ use Mojo::IOLoop::Server;
 use Mojo::Promise;
 use Mojo::Server::DaemonControl;
 use Mojo::UserAgent;
-use Time::HiRes qw(time);
 
 my $app    = curfile->dirname->child(qw(my-app my-app.pl));
 my $port   = Mojo::IOLoop::Server->generate_port;
@@ -22,11 +21,10 @@ subtest 'run and spawn if reaped' => sub {
       $pid{$pid} = 1;
 
       my $n_pids = keys %pid;
-      Mojo::Promise->timer(0.2)->then(sub {
-        return $ua->get_p($listen->clone->path('/pid')->to_string);
-      })->then(sub {
-        my $tx = shift;
-
+      my $url    = $listen->clone->path('/pid')->to_string;
+      wait_until_ready($url);
+      return $ua->get_p($url)->then(sub {
+        my $tx         = shift;
         my $daemon_pid = $tx->res->body =~ m!pid=(\d+)! && $1;
         $pid{$daemon_pid} += 10 if $daemon_pid;
 
@@ -55,9 +53,9 @@ subtest 'stop worker gracefully with SIGQUIT' => sub {
       $pid{$pid} = 0;
       return if keys(%pid) == 1;
 
-      Mojo::Promise->timer(0.2)->then(sub {
-        return $ua->websocket_p($listen->clone->path('/ws')->to_string);
-      })->then(sub {
+      my $url = $listen->clone->path('/ws')->to_string;
+      wait_until_ready($url);
+      return $ua->websocket_p($url)->then(sub {
         my $tx  = shift;
         my $err = $tx->error;
         push @tx, $tx;
@@ -74,7 +72,9 @@ subtest 'stop worker gracefully with SIGQUIT' => sub {
   $dctl->run($app);
 
   my @t = sort values %pid;
-  is $t[0] + 3, within($t[1], 1), "one child waited for three more seconds (@t)";
+  ok $t[1] - $t[0] >= 3, "one child hot reloaded (@t)";
 };
 
 done_testing;
+
+sub wait_until_ready { 1 until $ua->get($_[0])->res->code }
