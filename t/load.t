@@ -44,6 +44,10 @@ subtest 'run and spawn if reaped' => sub {
   my $todo = todo 'This test is unlikely to pass';
   is int(keys %pid), 4,                'workers';
   is [values %pid],  [25, 25, 25, 25], 'load';
+
+  warn Mojo::Util::tablify(
+    [['#', '', ''], ['#', 'pid', 'req'], map { ['#', $_, $pid{$_}] } sort keys %pid])
+    if $ENV{TEST_NOTES};
 };
 
 done_testing;

@@ -26,5 +26,6 @@ jobs:
         run: prove -l t/*.t
         env:
           HARNESS_OPTIONS: j4
+          TEST_NOTES: 1
           TEST_ALL: 1
           TEST_POD: 1
