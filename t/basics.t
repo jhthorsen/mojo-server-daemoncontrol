@@ -7,6 +7,7 @@ subtest basics => sub {
   my $dctl = Mojo::Server::DaemonControl->new;
   like $dctl->pid_file, qr{mojo-daemon-control\.pid$}, 'pid_file';
   is $dctl->graceful_timeout, 120, 'graceful_timeout';
+  is $dctl->listen->[0]->to_string, 'http://*:8080', 'listen';
   is $dctl->workers,          4,   'workers';
 };
 

@@ -4,10 +4,14 @@ use Mojo::Base 'Mojo::EventEmitter', -signatures;
 use File::Spec::Functions qw(tmpdir);
 use Mojo::File qw(path);
 use Mojo::Log;
+use Mojo::URL;
+use Mojo::Util qw(steady_time);
 use POSIX qw(WNOHANG);
 use Scalar::Util qw(weaken);
+use Time::HiRes qw(sleep);
 
 has graceful_timeout => 120;
+has listen           => sub ($self) { [Mojo::URL->new('http://*:8080')] };
 has log              => sub ($self) { $self->_build_log };
 has pid_file         => sub { path(tmpdir, sprintf '%s-mojo-daemon-control.pid', $<) };
 has workers          => 4;
@@ -35,16 +39,17 @@ sub run ($self, $app) {
   local $SIG{TTIN} = sub { $self->_inc_workers(1) };
   local $SIG{TTOU} = sub { $self->_inc_workers(-1) };
 
-  $self->log->info("Manager for $app started");
-  $self->{running} = 1;
+  @$self{qw(pool running)} = ({}, 1);
   $self->emit('start');
-  $self->_manage while $self->{running};
+  $self->log->info("Manager for $app started");
+  $self->_manage($app) while $self->{running};
   $self->log->info("Manager for $app stopped");
 }
 
 sub stop ($self, $signal = 'TERM') {
-  $self->{running} = 0;
-  $self->emit(stop => $signal);
+  $self->{stop_signal} = $signal;
+  $self->log->info("Manager will stop workers with signal $signal");
+  return $self->emit(stop => $signal);
 }
 
 sub _build_log ($self) {
@@ -57,13 +62,55 @@ sub _inc_workers ($self, $by) {
   $self->workers(1) if $self->workers < 1;
 }
 
-sub _manage ($self) {
+sub _manage ($self, $app) {
+  my $pool = $self->{pool};
+
+  # Should not call _manage() too often. Also, sleep() will be interrupted
+  # when a signal (Ex SIGCHLD) occurs.
+  my ($l, $t) = ($self->{managed_at}, steady_time);
+  return sleep 0.2 if $l and $t - $l < 0.2;
+  $self->{managed_at} = $t;
+
+  if (my $signal = $self->{stop_signal}) {
+
+    # Fully stopped
+    return delete @$self{qw(running stop_signal)} unless keys %$pool;
+
+    # Stop running workers
+    $self->log->debug(sprintf 'kill %s %s == %s', $signal, $_, kill $signal => $_)
+      for keys %{$self->{pool}};
+  }
+  else {
+    # Make sure we have enough workers and a pid file
+    my $need = $self->workers - int grep { !$_->{graceful} } values %$pool;
+    $self->log->debug("Manager starting $need workers") if $need > 0;
+    $self->_spawn($app) while !$self->{stop_signal} && $need-- > 0;
+    $self->ensure_pid_file($$) unless $self->{stop_signal};
+  }
+}
+
+sub _spawn ($self, $app) {
+  my @args;
+  push @args, map {
+    my $url = $_->clone;
+    $url->query->param(reuse => 1);
+    (-l => $url->to_string);
+  } @{$self->listen};
+
+  # Parent
+  die "Can't fork: $!" unless defined(my $pid = fork);
+  return $self->emit(spawn => $pid)->{pool}{$pid} = {time => steady_time} if $pid;
+
+  # Child
+  exec $^X => $app => daemon => @args;
+  die "Could not exec $app: $!";
 }
 
 sub _waitpid ($self) {
   while ((my $pid = waitpid -1, WNOHANG) > 0) {
     $self->log->debug("Worker $pid stopped");
     $self->emit(reap => $pid);
+    delete $self->{pool}{$pid};
   }
 }
 

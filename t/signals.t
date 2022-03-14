@@ -1,11 +1,12 @@
 use Mojo::Base -strict;
 use Test2::V0;
+use Mojo::File qw(curfile);
 use Mojo::Server::DaemonControl;
 
-my $app = 'signal-app.pl';
+my $app = curfile->dirname->child(qw(t no-such-app.pl))->to_abs->to_string;
 
 subtest 'signals - stop' => sub {
-  my $dctl = Mojo::Server::DaemonControl->new;
+  my $dctl = Mojo::Server::DaemonControl->new(workers => 0);
   my @stop;
   for my $sig (qw(INT QUIT TERM)) {
     $dctl->once(stop  => sub { push @stop, $_[1] });
@@ -42,7 +43,7 @@ subtest 'signals - workers' => sub {
 };
 
 subtest 'signals - reap' => sub {
-  my $dctl = Mojo::Server::DaemonControl->new;
+  my $dctl = Mojo::Server::DaemonControl->new(workers => 0);
   my @reap;
   $dctl->once(reap => sub { push @reap, $_[1]; shift->stop });
   $dctl->once(start => sub { my $pid = fork; die $! unless defined $pid; exit unless $pid; });
