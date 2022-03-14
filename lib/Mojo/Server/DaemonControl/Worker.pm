@@ -1,14 +1,32 @@
 package Mojo::Server::DaemonControl::Worker;
 use Mojo::Base 'Mojo::Server::Daemon', -signatures;
 
+use IO::Socket::UNIX;
 use Scalar::Util qw(weaken);
+
+has heartbeat_interval => sub { $ENV{MOJO_SERVER_DAEMON_HEARTBEAT_INTERVAL} || 5 };
+has worker_pipe        => sub ($self) { $self->_build_worker_pipe };
 
 sub run ($self, $app, @) {
   weaken $self;
-  my $loop = $self->ioloop;
+  my $loop         = $self->ioloop;
+  my $heartbeat_cb = sub { $self->_heartbeat('h') };
+  $loop->next_tick($heartbeat_cb);
+  $loop->recurring($self->heartbeat_interval, $heartbeat_cb);
   $loop->on(finish => sub { $self->max_requests(1) });
-  local $SIG{QUIT} = sub { $loop->stop_gracefully };
+  local $SIG{QUIT} = sub { $self->_heartbeat('g'); $loop->stop_gracefully };
   return $self->tap(load_app => $app)->SUPER::run;
+}
+
+sub _build_worker_pipe ($self) {
+  my $path = $ENV{MOJO_SERVER_DAEMON_MANAGER_PIPE}
+    || die "Can't create a worker pipe: MOJO_SERVER_DAEMON_MANAGER_PIPE not set";
+  return IO::Socket::UNIX->new(Peer => $path, Type => SOCK_DGRAM)
+    || die "Can't create a worker pipe: $@";
+}
+
+sub _heartbeat ($self, $state) {
+  $self->worker_pipe->syswrite("$$:$state\n") || die "ERR! $!";
 }
 
 1;
@@ -49,7 +67,22 @@ L<Mojo::Server::Daemon>.
 =head1 ATTRIBUTES
 
 L<Mojo::Server::DaemonControl::Worker> inherits all attributes from
-L<Mojo::Server::Daemon>.
+L<Mojo::Server::Daemon> and implements the following ones.
+
+=head2 heartbeat_interval
+
+  $int    = $daemon->heartbeat_interval;
+  $daemon = $daemon->heartbeat_interval(2.5);
+
+Heartbeat interval in seconds.
+
+=head2 worker_pipe
+
+  $socket = $daemon->worker_pipe;
+
+Holds a L<IO::Socket::UNIX> object used to communicate with the manager. The
+default socket path is read from the C<MOJO_SERVER_DAEMON_MANAGER_PIPE>
+environment variable.
 
 =head1 METHODS
 

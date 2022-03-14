@@ -3,9 +3,11 @@ use Mojolicious::Lite -signatures;
 
 get '/pid' => {text => "pid=$$"};
 
-websocket '/ws' => sub ($c) {
-  $c->inactivity_timeout($c->param('t') || 2);
-  $c->send({json => {pid => $$}});
+get '/slow' => sub ($c) {
+  my $t = $c->param('t') || 2;
+  $c->inactivity_timeout($t + 1);
+  $c->render_later;
+  Mojo::Promise->timer($t)->then(sub { $c->render(text => 'slow') });
 };
 
 app->log->level($ENV{MOJO_LOG_LEVEL} || 'error');
