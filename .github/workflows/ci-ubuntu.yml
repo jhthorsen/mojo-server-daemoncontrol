@@ -1,0 +1,30 @@
+name: ci-ubuntu
+on:
+  pull_request:
+  push:
+    branches:
+      - '**'
+jobs:
+  perl:
+    name: "Perl ${{matrix.perl}} on ${{matrix.os}}"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        perl: ["5.20", "5.32"]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: "${{matrix.perl}}"
+      - name: perl -V
+        run: perl -V
+      - name: Install dependencies
+        run: |
+          cpanm -n Test::Pod Test::Pod::Coverage
+          cpanm -n --installdeps .
+      - name: Run tests
+        run: prove -l t/*.t
+        env:
+          HARNESS_OPTIONS: j4
+          TEST_ALL: 1
+          TEST_POD: 1
