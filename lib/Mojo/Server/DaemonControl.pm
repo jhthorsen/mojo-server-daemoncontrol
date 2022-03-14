@@ -118,9 +118,9 @@ sub _spawn ($self, $app) {
 
 sub _waitpid ($self) {
   while ((my $pid = waitpid -1, WNOHANG) > 0) {
+    next unless delete $self->{pool}{$pid};
     $self->log->debug("Worker $pid stopped");
     $self->emit(reap => $pid);
-    delete $self->{pool}{$pid};
   }
 }
 

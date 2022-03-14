@@ -50,6 +50,7 @@ subtest 'signals - reap' => sub {
     start => sub {
       die "Can't fork: $!" unless defined(my $pid = fork);
       exit                 unless $pid;
+      $dctl->{pool}{$pid} = {};
       1 while $running;
     }
   );
