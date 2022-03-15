@@ -49,7 +49,8 @@ sub run ($self, $app) {
   local $SIG{TTIN} = sub { $self->_inc_workers(1) };
   local $SIG{TTOU} = sub { $self->_inc_workers(-1) };
 
-  @$self{qw(pool running)} = ({}, 1);
+  $self->{pool} ||= {};
+  $self->{running} = 1;
   $self->worker_pipe;    # Make sure we have a working pipe
   $self->emit('start');
   $self->log->info("Manager for $app started");
@@ -82,8 +83,13 @@ sub _build_worker_pipe ($self) {
 }
 
 sub _inc_workers ($self, $by) {
-  $self->workers($self->workers + $by);
-  $self->workers(1) if $self->workers < 1;
+  my $workers = $self->workers + $by;
+  $workers = 1 if $workers < 1;
+  $self->workers($workers);
+
+  my @stop = grep { !$_->{graceful} } values %{$self->{pool}};
+  splice @stop, 0, $workers;
+  $_->{graceful} = steady_time for @stop;
 }
 
 sub _kill ($self, $signal, $w, $reason = "with $signal") {
