@@ -18,13 +18,14 @@ our $MOJODCTL = do {
   -x $x ? $x : 'mojodctl';
 };
 
-has graceful_timeout  => 120;
-has heartbeat_timeout => 30;
-has listen            => sub ($self) { [Mojo::URL->new('http://*:8080')] };
-has log               => sub ($self) { $self->_build_log };
-has pid_file          => sub ($self) { $self->_build_pid_file };
-has workers           => 4;
-has worker_pipe       => sub ($self) { $self->_build_worker_pipe };
+has graceful_timeout   => 120;
+has heartbeat_interval => 5;
+has heartbeat_timeout  => 50;
+has listen             => sub ($self) { [Mojo::URL->new('http://*:8080')] };
+has log                => sub ($self) { $self->_build_log };
+has pid_file           => sub ($self) { $self->_build_pid_file };
+has workers            => 4;
+has worker_pipe        => sub ($self) { $self->_build_worker_pipe };
 
 sub check_pid ($self) {
   return 0 unless my $pid = -r $self->pid_file && $self->pid_file->slurp;
@@ -93,6 +94,7 @@ sub _inc_workers ($self, $by) {
 }
 
 sub _kill ($self, $signal, $w, $reason = "with $signal") {
+  return if $w->{$signal};
   $w->{$signal} = kill($signal => $w->{pid}) // 0;
   $self->log->info("Stopping worker $w->{pid} $reason == $w->{$signal}");
 }
@@ -112,6 +114,26 @@ sub _manage ($self, $app) {
   $self->log->debug("Manager starting $need workers") if $need > 0;
   $self->_spawn($app) while !$self->{stop_signal} && $need-- > 0;
   $self->ensure_pid_file($$) unless $self->{stop_signal};
+
+  # Keep track of worker health
+  my $gt   = $self->graceful_timeout;
+  my $ht   = $self->heartbeat_timeout;
+  my $time = steady_time;
+  for my $pid (keys %$pool) {
+    next unless my $w = $pool->{$pid};
+
+    if (!$w->{graceful} and $w->{time} + $ht <= $time) {
+      $w->{graceful} = $time;
+      $self->log->error("Worker $pid has no heartbeat");
+    }
+
+    if ($gt and $w->{graceful} and $w->{graceful} + $gt < $time) {
+      $self->_kill(KILL => $w, 'with no heartbeat');
+    }
+    elsif ($w->{graceful}) {
+      $self->_kill(QUIT => $w, 'gracefully');
+    }
+  }
 }
 
 sub _read_heartbeat ($self) {
@@ -141,10 +163,9 @@ sub _spawn ($self, $app) {
   return $self->emit(spawn => $self->{pool}{$pid} = {pid => $pid, time => steady_time}) if $pid;
 
   # Child
-  my $ht = $self->heartbeat_timeout;
-  $ENV{MOJO_SERVER_DAEMON_HEARTBEAT_INTERVAL} ||= $ht >= 20 ? 5 : 1;    # TODO
-  $ENV{MOJO_SERVER_DAEMON_MANAGER_CLASS} = 'Mojo::Server::DaemonControl::Worker';
-  $ENV{MOJO_SERVER_DAEMON_MANAGER_PIPE}  = $self->worker_pipe->hostpath;
+  $ENV{MOJO_SERVER_DAEMON_HEARTBEAT_INTERVAL} = $self->heartbeat_interval;
+  $ENV{MOJO_SERVER_DAEMON_MANAGER_CLASS}      = 'Mojo::Server::DaemonControl::Worker';
+  $ENV{MOJO_SERVER_DAEMON_MANAGER_PIPE}       = $self->worker_pipe->hostpath;
   $self->log->debug("Exec $^X $MOJODCTL $app daemon @args");
   exec $^X, $MOJODCTL => $app => daemon => @args;
   die "Could not exec $app: $!";
@@ -240,7 +261,24 @@ L<Mojo::EventEmitter> and implements the following ones.
   $timeout = $dctl->graceful_timeout;
   $dctl    = $dctl->graceful_timeout(120);
 
-TODO
+A worker will be forced stopped if it could not be gracefully stopped after
+this amount of time.
+
+=head2 heartbeat_interval
+
+  $num  = $dctl->heartbeat_interval;
+  $dctl = $dctl->heartbeat_interval(5);
+
+Heartbeat interval in seconds. This value is passed on to
+L<Mojo::Server::DaemonControl::Worker/heartbeat_interval>.
+
+=head2 heartbeat_timeout
+
+  $num  = $dctl->heartbeat_timeout;
+  $dctl = $dctl->heartbeat_timeout(120);
+
+A worker will be stopped gracefully if a heartbeat has not been seen within
+this amount of time.
 
 =head2 listen
 

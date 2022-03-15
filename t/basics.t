@@ -6,9 +6,11 @@ use Mojo::Server::DaemonControl;
 subtest basics => sub {
   my $dctl = Mojo::Server::DaemonControl->new;
   like $dctl->pid_file, qr{mojo-daemon-control\.pid$}, 'pid_file';
-  is $dctl->graceful_timeout, 120, 'graceful_timeout';
+  is $dctl->graceful_timeout,       120,             'graceful_timeout';
+  is $dctl->heartbeat_interval,     5,               'heartbeat_interval';
+  is $dctl->heartbeat_timeout,      50,              'heartbeat_timeout';
   is $dctl->listen->[0]->to_string, 'http://*:8080', 'listen';
-  is $dctl->workers,          4,   'workers';
+  is $dctl->workers,                4,               'workers';
 };
 
 subtest 'pid file' => sub {

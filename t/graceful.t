@@ -14,8 +14,8 @@ my $listen = Mojo::URL->new(sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server-
 my $t0;
 
 subtest 'stop workers gracefully' => sub {
-  local $ENV{MOJO_SERVER_DAEMON_HEARTBEAT_INTERVAL} = 0.5;
-  my $dctl = Mojo::Server::DaemonControl->new(listen => [$listen], workers => 2);
+  my $dctl = Mojo::Server::DaemonControl->new(heartbeat_interval => 0.5, listen => [$listen],
+    workers => 2);
   my %pids;
 
   $dctl->on(

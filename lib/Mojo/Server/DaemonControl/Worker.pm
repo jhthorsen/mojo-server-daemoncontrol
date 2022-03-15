@@ -74,7 +74,8 @@ L<Mojo::Server::Daemon> and implements the following ones.
   $int    = $daemon->heartbeat_interval;
   $daemon = $daemon->heartbeat_interval(2.5);
 
-Heartbeat interval in seconds.
+Heartbeat interval in seconds. See
+L<Mojo::Server::DaemonControl::Worker/heartbeat_interval> for more details.
 
 =head2 worker_pipe
 

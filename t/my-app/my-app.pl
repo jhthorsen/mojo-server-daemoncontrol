@@ -3,6 +3,10 @@ use Mojolicious::Lite -signatures;
 
 get '/pid' => {text => "pid=$$"};
 
+get '/block' => sub ($c) {
+  sleep 4;
+};
+
 get '/slow' => sub ($c) {
   my $t = $c->param('t') || 2;
   $c->inactivity_timeout($t + 1);
