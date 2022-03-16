@@ -1,11 +1,8 @@
 #!/usr/bin/env perl
 use Mojolicious::Lite -signatures;
 
-get '/pid' => {text => "pid=$$"};
-
-get '/block' => sub ($c) {
-  sleep 4;
-};
+get '/block' => sub ($c) { $c->render_later; sleep 5 };
+get '/pid'   => {text => "pid=$$"};
 
 get '/slow' => sub ($c) {
   my $t = $c->param('t') || 2;

@@ -50,6 +50,7 @@ sub run ($self, $app) {
   local $SIG{TERM} = sub { $self->stop('TERM') };
   local $SIG{TTIN} = sub { $self->_inc_workers(1) };
   local $SIG{TTOU} = sub { $self->_inc_workers(-1) };
+  local $SIG{USR2} = sub { $self->_hot_deploy };
 
   $self->{pool} ||= {};
   @$self{qw(pid running)} = ($$, 1);
@@ -84,14 +85,21 @@ sub _build_worker_pipe ($self) {
     || die "Can't create a worker pipe: $@";
 }
 
+sub _hot_deploy ($self) {
+  $self->log->info('Starting hot deployment.');
+  my $time = steady_time;
+  $_->{graceful} = $time for values %{$self->{pool}};
+}
+
 sub _inc_workers ($self, $by) {
   my $workers = $self->workers + $by;
   $workers = 1 if $workers < 1;
   $self->workers($workers);
 
+  my $time = steady_time;
   my @stop = grep { !$_->{graceful} } values %{$self->{pool}};
   splice @stop, 0, $workers;
-  $_->{graceful} = steady_time for @stop;
+  $_->{graceful} = $time for @stop;
 }
 
 sub _kill ($self, $signal, $w, $reason = "with $signal") {
@@ -224,7 +232,7 @@ emulation. It should work on most modern Linux based systems though.
 
 This server is an alternative to L<Mojo::Server::Hypnotoad> where each of the
 workers handle long running (WebSocket) requests. The main difference is that a
-hot reload will simply start new workers, instead of restarting the manager.
+hot deploy will simply start new workers, instead of restarting the manager.
 This is useful if you need/want to deploy a new version of your server during
 the L</graceful_timeout>. Normally this is not something you would need, but in
 some cases where the graceful timeout and long running requests last for

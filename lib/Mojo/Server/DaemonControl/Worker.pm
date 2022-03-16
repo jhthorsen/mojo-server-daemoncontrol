@@ -14,7 +14,7 @@ sub run ($self, $app, @) {
   $loop->next_tick($heartbeat_cb);
   $loop->recurring($self->heartbeat_interval, $heartbeat_cb);
   $loop->on(finish => sub { $self->max_requests(1) });
-  local $SIG{QUIT} = sub { $self->_heartbeat('g'); $loop->stop_gracefully };
+  local $SIG{QUIT} = sub { $self->_stop_gracefully };
   return $self->tap(load_app => $app)->SUPER::run;
 }
 
@@ -27,6 +27,12 @@ sub _build_worker_pipe ($self) {
 
 sub _heartbeat ($self, $state) {
   $self->worker_pipe->syswrite("$$:$state\n") || die "ERR! $!";
+}
+
+sub _stop_gracefully ($self) {
+  $self->ioloop->stop_gracefully;
+  $self->_heartbeat('g');
+  $0 .= '-' . time;    # Rename process to indicate which is going to be replaced
 }
 
 1;
