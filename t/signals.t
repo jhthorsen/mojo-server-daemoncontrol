@@ -5,7 +5,7 @@ use Mojo::Server::DaemonControl;
 
 my $app = curfile->dirname->child(qw(t no-such-app.pl))->to_abs->to_string;
 
-subtest 'signals - stop' => sub {
+subtest 'stop' => sub {
   my $dctl = dctl(workers => 0);
   my @stop;
   for my $sig (qw(INT QUIT TERM)) {
@@ -17,7 +17,7 @@ subtest 'signals - stop' => sub {
   is \@stop, [qw(INT QUIT TERM)], 'INT QUIT TERM';
 };
 
-subtest 'signals - workers' => sub {
+subtest 'workers' => sub {
   my $dctl = dctl();
 
   note 'increase';
@@ -59,7 +59,7 @@ subtest 'signals - workers' => sub {
   is $dctl->workers, 1, 'min workers';
 };
 
-subtest 'signals - reap' => sub {
+subtest 'reap' => sub {
   my $dctl = dctl(workers => 0);
   my ($running, @reap) = (1);
   $dctl->once(reap => sub { push @reap, $_[1]; $running = 0 });

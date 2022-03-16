@@ -61,6 +61,9 @@ some cases where the graceful timeout and long running requests last for
 several hours or even days, then it might come in handy to let the old
 code run, while new processes are deployed.
 
+Note that [Mojo::Server::DaemonControl](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl) is currently EXPERIMENTAL and it has
+not been tested in production yet. Feedback is more than welcome.
+
 # SIGNALS
 
 ## INT, TERM

@@ -12,6 +12,8 @@ use Mojo::Util qw(steady_time);
 use POSIX qw(WNOHANG);
 use Scalar::Util qw(weaken);
 
+our $VERSION = '0.01';
+
 # This should be considered internal for now
 our $MOJODCTL = do {
   my $x = $0 =~ m!\bmojodctl$! && -x $0 ? $0 : $ENV{MOJODCTL_BINARY};
@@ -265,6 +267,9 @@ the L</graceful_timeout>. Normally this is not something you would need, but in
 some cases where the graceful timeout and long running requests last for
 several hours or even days, then it might come in handy to let the old
 code run, while new processes are deployed.
+
+Note that L<Mojo::Server::DaemonControl> is currently EXPERIMENTAL and it has
+not been tested in production yet. Feedback is more than welcome.
 
 =head1 SIGNALS
 
