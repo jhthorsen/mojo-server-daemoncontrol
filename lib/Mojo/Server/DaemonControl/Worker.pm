@@ -19,8 +19,8 @@ sub run ($self, $app, @) {
 }
 
 sub _build_worker_pipe ($self) {
-  my $path = $ENV{MOJO_SERVER_DAEMON_MANAGER_PIPE}
-    || die "Can't create a worker pipe: MOJO_SERVER_DAEMON_MANAGER_PIPE not set";
+  my $path = $ENV{MOJO_SERVER_DAEMON_CONTROL_SOCK}
+    || die "Can't create a worker pipe: MOJO_SERVER_DAEMON_CONTROL_SOCK not set";
   return IO::Socket::UNIX->new(Peer => $path, Type => SOCK_DGRAM)
     || die "Can't create a worker pipe: $@";
 }
@@ -88,7 +88,7 @@ L<Mojo::Server::DaemonControl::Worker/heartbeat_interval> for more details.
   $socket = $daemon->worker_pipe;
 
 Holds a L<IO::Socket::UNIX> object used to communicate with the manager. The
-default socket path is read from the C<MOJO_SERVER_DAEMON_MANAGER_PIPE>
+default socket path is read from the C<MOJO_SERVER_DAEMON_CONTROL_SOCK>
 environment variable.
 
 =head1 METHODS

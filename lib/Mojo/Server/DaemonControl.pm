@@ -68,7 +68,8 @@ sub stop ($self, $signal = 'TERM') {
 }
 
 sub _build_log ($self) {
-  $ENV{MOJO_LOG_LEVEL} ||= $ENV{HARNESS_IS_VERBOSE} ? 'debug' : 'error' if $ENV{HARNESS_ACTIVE};
+  $ENV{MOJO_LOG_LEVEL}
+    ||= $ENV{HARNESS_IS_VERBOSE} ? 'debug' : $ENV{HARNESS_ACTIVE} ? 'error' : 'info';
   return Mojo::Log->new(level => $ENV{MOJO_LOG_LEVEL});
 }
 
@@ -173,8 +174,8 @@ sub _spawn ($self, $app) {
 
   # Child
   $ENV{MOJO_SERVER_DAEMON_HEARTBEAT_INTERVAL} = $self->heartbeat_interval;
-  $ENV{MOJO_SERVER_DAEMON_MANAGER_CLASS}      = 'Mojo::Server::DaemonControl::Worker';
-  $ENV{MOJO_SERVER_DAEMON_MANAGER_PIPE}       = $self->worker_pipe->hostpath;
+  $ENV{MOJO_SERVER_DAEMON_CONTROL_CLASS}      = 'Mojo::Server::DaemonControl::Worker';
+  $ENV{MOJO_SERVER_DAEMON_CONTROL_SOCK}       = $self->worker_pipe->hostpath;
   $self->log->debug("Exec $^X $MOJODCTL $app daemon @args");
   exec $^X, $MOJODCTL => $app => daemon => @args;
   die "Could not exec $app: $!";
@@ -316,7 +317,7 @@ A L<Mojo::Log> object used for logging.
 A L<Mojo::File> object with the path to the pid file.
 
 Note that the PID file must end with ".pid"! Default path is
-"$EUID-mojo-daemon-control.pid" in L<File::Spec/tmpdir>.
+"$EUID-mojodctl.pid" in L<File::Spec/tmpdir>.
 
 =head2 workers
 
