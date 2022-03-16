@@ -6,7 +6,7 @@ use Mojo::Server::DaemonControl;
 
 plan skip_all => 'TEST_LIVE=1' unless $ENV{TEST_LIVE};
 
-my $app    = curfile->dirname->child(qw(my-app my-app.pl));
+my $app    = curfile->dirname->child('myapp.pl');
 my $listen = Mojo::URL->new(sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server->generate_port);
 
 subtest 'spawn if reaped' => sub {

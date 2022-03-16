@@ -89,12 +89,12 @@ stop them, and start new workers in a fresh environment that handles the new
 connections. The manager process will remain the same.
 
     $ mojodctl
-      |- my-app.pl-1647405707
-      |- my-app.pl-1647405707
-      |- my-app.pl-1647405707
-      |- my-app.pl
-      |- my-app.pl
-      '- my-app.pl
+      |- myapp.pl-1647405707
+      |- myapp.pl-1647405707
+      |- myapp.pl-1647405707
+      |- myapp.pl
+      |- myapp.pl
+      '- myapp.pl
 
 EXPERIMENTAL: The workers that waits to be stopped will have a timestamp
 appended to `$0` to illustrate which is new and which is old.

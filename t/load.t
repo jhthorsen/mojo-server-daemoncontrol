@@ -15,7 +15,7 @@ plan skip_all => 'TEST_LIVE=1' unless $ENV{TEST_LIVE};
 
 my $n_req     = $ENV{TEST_LOAD_REQUESTS} || 100;
 my $n_workers = $ENV{TEST_LOAD_WORKERS}  || 4;
-my $app       = curfile->dirname->child(qw(my-app my-app.pl));
+my $app       = curfile->dirname->child('myapp.pl');
 my $listen    = Mojo::URL->new(sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server->generate_port);
 
 subtest 'run and spawn if reaped' => sub {
