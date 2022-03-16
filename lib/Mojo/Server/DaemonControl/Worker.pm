@@ -5,6 +5,7 @@ use IO::Socket::UNIX;
 use Scalar::Util qw(weaken);
 
 has heartbeat_interval => sub { $ENV{MOJO_SERVER_DAEMON_HEARTBEAT_INTERVAL} || 5 };
+has silent             => 1;
 has worker_pipe        => sub ($self) { $self->_build_worker_pipe };
 
 sub run ($self, $app, @) {
@@ -82,6 +83,13 @@ L<Mojo::Server::Daemon> and implements the following ones.
 
 Heartbeat interval in seconds. See
 L<Mojo::Server::DaemonControl::Worker/heartbeat_interval> for more details.
+
+=head2 silent
+
+  $bool   = $daemon->silent;
+  $daemon = $daemon->silent(1);
+
+Changes the default in L<Mojo::Server::Daemon/silent> to 1.
 
 =head2 worker_pipe
 
