@@ -25,9 +25,13 @@ subtest 'hot deploy workers' => sub {
   $dctl->on(
     heartbeat => sub {
       my ($dctl, $w) = @_;
-      run_slow_request_in_fork() unless $reloaded++;
       $workers{$w->{pid}} = $w;
-      $dctl->stop if grep { $_->{KILL} } values %workers;
+
+      # Only do this once
+      state $ua_pid = run_slow_request_in_fork();
+
+      # Do not stop the server before the forced worker is actually stopped
+      $dctl->stop if grep { $_->{KILL} and !kill 0, $_->{pid} } values %workers;
     }
   );
 
@@ -37,9 +41,10 @@ subtest 'hot deploy workers' => sub {
   is int(values %workers), 4, 'started';
   my ($forced) = grep { $_->{KILL} } values %workers;
   my ($normal) = grep { $_->{QUIT} and !$_->{KILL} } values %workers;
-  is $normal->{graceful},   $forced->{graceful},            'stopped at the same time';
-  is $normal->{reaped} + 2, within($forced->{reaped}, 0.2), 'forced after graceful';
-  is int(grep { $_->{TERM} } values %workers), 2,           'new workers';
+  is $normal->{graceful}, $forced->{graceful}, 'stopped at the same time';
+  is $normal->{reaped} + 2, within($forced->{reaped}, 0.2), 'forced after graceful'
+    or diag Mojo::Util::dumper(\%workers);
+  is int(grep { $_->{TERM} } values %workers), 2, 'new workers';
 };
 
 done_testing;

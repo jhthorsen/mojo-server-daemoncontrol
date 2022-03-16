@@ -9,6 +9,8 @@ use Time::HiRes qw(time);
 
 plan skip_all => 'TEST_LIVE=1' unless $ENV{TEST_LIVE};
 
+$ENV{MOJO_LOG_LEVEL} ||= 'fatal' unless $ENV{HARNESS_IS_VERBOSE};
+
 my $app    = curfile->dirname->child('myapp.pl');
 my $listen = Mojo::URL->new(sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server->generate_port);
 my $t0;
@@ -26,31 +28,26 @@ subtest 'force stop blocked workers' => sub {
   $dctl->on(
     heartbeat => sub {
       my ($dctl, $w) = @_;
-      run_slow_request_in_fork() unless $ENV{REQUEST}++;
       $workers{$w->{pid}} = $w;
-      $dctl->stop if grep { $_->{KILL} } values %workers;
+
+      # Only do this once
+      state $ua_pid = run_slow_request_in_fork();
+
+      # Do not stop the server before the forced worker is actually stopped
+      $dctl->stop if grep { $_->{KILL} and !kill 0, $_->{pid} } values %workers;
     }
   );
 
   $dctl->run($app);
 
+  my %got;
   for my $w (values %workers) {
-    $w->{graceful} = 2  if $w->{graceful};
-    $w->{time}     = 1  if $w->{time};
-    $w->{pid}      = 42 if $w->{pid};
-    $w->{pid}++ if $w->{QUIT};
-    $w->{pid}++ if $w->{KILL};
+    $got{graceful}++ if $w->{graceful};
+    $got{forced}++   if $w->{KILL} and $w->{QUIT};
+    $got{stopped}++  if $w->{TERM};
   }
 
-  is(
-    [sort { $a->{pid} <=> $b->{pid} } values %workers],
-    [
-      {pid      => 42, time => 1,  TERM => 1},
-      {pid      => 42, time => 1,  TERM => 1},
-      {graceful => 2,  pid  => 44, time => 1, KILL => 1, QUIT => 1},
-    ],
-    'workers killed'
-  );
+  is \%got, {forced => 1, graceful => 1, stopped => 2}, 'workers killed';
 };
 
 done_testing;

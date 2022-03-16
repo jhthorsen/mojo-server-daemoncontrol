@@ -126,7 +126,7 @@ sub _manage ($self, $app) {
   my $need = $self->workers - int grep { !$_->{graceful} } values %$pool;
   $self->log->debug("Manager starting $need workers") if $need > 0;
   $self->_spawn($app) while !$self->{stop_signal} && $need-- > 0;
-  $self->ensure_pid_file unless $self->{stop_signal};
+  $self->ensure_pid_file;
 
   # Keep track of worker health
   my $gt   = $self->graceful_timeout;
