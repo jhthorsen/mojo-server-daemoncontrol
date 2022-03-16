@@ -18,7 +18,7 @@ subtest 'pid file' => sub {
   my $dctl     = Mojo::Server::DaemonControl->new(pid_file => $pid_file);
   is $dctl->check_pid, 0, 'no pid';
 
-  ok $dctl->ensure_pid_file($$), 'ensure_pid_file';
+  ok $dctl->ensure_pid_file, 'ensure_pid_file';
   is $dctl->check_pid, $$, 'wrote pid';
 
   undef $dctl;

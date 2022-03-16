@@ -35,7 +35,8 @@ sub check_pid ($self) {
   return 0;
 }
 
-sub ensure_pid_file ($self, $pid) {
+sub ensure_pid_file ($self) {
+  my $pid = $self->{pid} ||= $$;
   return $self if -s (my $file = $self->pid_file);
   $self->log->info("Writing pid $pid to @{[$self->pid_file]}");
   return $file->spurt("$pid\n")->chmod(0644) && $self;
@@ -51,7 +52,7 @@ sub run ($self, $app) {
   local $SIG{TTOU} = sub { $self->_inc_workers(-1) };
 
   $self->{pool} ||= {};
-  $self->{running} = 1;
+  @$self{qw(pid running)} = ($$, 1);
   $self->worker_pipe;    # Make sure we have a working pipe
   $self->emit('start');
   $self->log->info("Manager for $app started");
@@ -113,7 +114,7 @@ sub _manage ($self, $app) {
   my $need = $self->workers - int grep { !$_->{graceful} } values %$pool;
   $self->log->debug("Manager starting $need workers") if $need > 0;
   $self->_spawn($app) while !$self->{stop_signal} && $need-- > 0;
-  $self->ensure_pid_file($$) unless $self->{stop_signal};
+  $self->ensure_pid_file unless $self->{stop_signal};
 
   # Keep track of worker health
   my $gt   = $self->graceful_timeout;
@@ -180,6 +181,7 @@ sub _waitpid ($self) {
 }
 
 sub DESTROY ($self) {
+  return if $self->{pid} and $self->{pid} != $$;    # Fork safety
   my $path = $self->pid_file;
   $path->remove if $path and -e $path;
 
