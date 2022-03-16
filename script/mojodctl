@@ -46,7 +46,7 @@ $daemon->run($app);
                                          defaults to the value of
                                          MOJO_MODE/PLACK_ENV or "development"
     -P, --pid-file <path>                Path to process id file, defaults to
-                                         "$EUID-mojodctl.pid" in a temporary directory
+                                         "mojodctl.pid" in a temporary directory
     -w, --workers <number>               Number of workers, defaults to 4
     -h, --help                           Show this summary of available options
 

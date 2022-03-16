@@ -10,6 +10,7 @@ has worker_pipe        => sub ($self) { $self->_build_worker_pipe };
 
 sub run ($self, $app, @) {
   weaken $self;
+  $0 = $app;
   my $loop         = $self->ioloop;
   my $heartbeat_cb = sub { $self->_heartbeat('h') };
   $loop->next_tick($heartbeat_cb);

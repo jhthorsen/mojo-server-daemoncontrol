@@ -1,6 +1,7 @@
 package Mojo::Server::DaemonControl;
 use Mojo::Base 'Mojo::EventEmitter', -signatures;
 
+use File::Basename qw(basename);
 use File::Spec::Functions qw(tmpdir);
 use IO::Select;
 use IO::Socket::UNIX;
@@ -23,7 +24,7 @@ has heartbeat_interval => 5;
 has heartbeat_timeout  => 50;
 has listen             => sub ($self) { [Mojo::URL->new('http://*:8080')] };
 has log                => sub ($self) { $self->_build_log };
-has pid_file           => sub ($self) { $self->_build_pid_file };
+has pid_file           => sub ($self) { path tmpdir, basename($0) . '.pid' };
 has workers            => 4;
 has worker_pipe        => sub ($self) { $self->_build_worker_pipe };
 
@@ -38,11 +39,16 @@ sub check_pid ($self) {
 sub ensure_pid_file ($self) {
   my $pid = $self->{pid} ||= $$;
   return $self if -s (my $file = $self->pid_file);
-  $self->log->info("Writing pid $pid to @{[$self->pid_file]}");
+  $self->log->debug("Writing pid $pid to @{[$self->pid_file]}");
   return $file->spurt("$pid\n")->chmod(0644) && $self;
 }
 
 sub run ($self, $app) {
+  if (my $pid = $self->check_pid) {
+    $self->log->info("Starting hot deployment of $pid.");
+    return kill(USR2 => $pid) ? 0 : 1;
+  }
+
   weaken $self;
   local $SIG{CHLD} = sub { $self->_waitpid };
   local $SIG{INT}  = sub { $self->stop('INT') };
@@ -71,10 +77,6 @@ sub _build_log ($self) {
   $ENV{MOJO_LOG_LEVEL}
     ||= $ENV{HARNESS_IS_VERBOSE} ? 'debug' : $ENV{HARNESS_ACTIVE} ? 'error' : 'info';
   return Mojo::Log->new(level => $ENV{MOJO_LOG_LEVEL});
-}
-
-sub _build_pid_file ($self) {
-  return path tmpdir, sprintf '%s-mojodctl.pid', $ENV{HARNESS_ACTIVE} ? $$ : $>;
 }
 
 sub _build_worker_pipe ($self) {
@@ -209,7 +211,15 @@ Mojo::Server::DaemonControl - A Mojolicious daemon manager
 
 =head2 Commmand line
 
-  $ mojodctl --workers 4 --listen 'http://*:8080' /path/to/my-mojo-app.pl;
+  # Start a server
+  $ mojodctl -l 'http://*:8080' -P /tmp/myapp.pid -w 4 /path/to/myapp.pl;
+
+  # Running mojodctl with the same PID file will hot reload a running server
+  # or start a new if it is not running
+  $ mojodctl -l 'http://*:8080' -P /tmp/myapp.pid -w 4 /path/to/myapp.pl;
+
+  # For more options
+  $ mojodctl --help
 
 =head2 Perl API
 
@@ -280,6 +290,17 @@ Will prevent existing workers from accepting new connections and eventually
 stop them, and start new workers in a fresh environment that handles the new
 connections. The manager process will remain the same.
 
+  $ mojodctl
+    |- my-app.pl-1647405707
+    |- my-app.pl-1647405707
+    |- my-app.pl-1647405707
+    |- my-app.pl
+    |- my-app.pl
+    '- my-app.pl
+
+EXPERIMENTAL: The workers that waits to be stopped will have a timestamp
+appended to C<$0> to illustrate which is new and which is old.
+
 =head1 ATTRIBUTES
 
 L<Mojo::Server::DaemonControl> inherits all attributes from
@@ -334,8 +355,8 @@ A L<Mojo::Log> object used for logging.
 
 A L<Mojo::File> object with the path to the pid file.
 
-Note that the PID file must end with ".pid"! Default path is
-"$EUID-mojodctl.pid" in L<File::Spec/tmpdir>.
+Note that the PID file must end with ".pid"! Default path is "mojodctl.pid" in
+L<File::Spec/tmpdir>.
 
 =head2 workers
 
@@ -361,7 +382,7 @@ L<Mojo::EventEmitter> and implements the following ones.
   $int = $dctl->check_pid;
 
 Returns the PID of the running process documented in L</pid_file> or zero (0)
-if is is not running.
+if it is not running.
 
 =head2 ensure_pid_file
 

@@ -47,7 +47,7 @@ done_testing;
 sub run_slow_request_in_fork {
   return if fork;
   my $ua = Mojo::UserAgent->new;
-  $ua->ioloop->timer(0.1 => sub { kill USR2 => getppid });
+  $ua->ioloop->timer(0.1 => sub { Mojo::Server::DaemonControl->new->run($app) });
   $ua->get($listen->clone->path('/block'));
   exit 0;
 }

@@ -6,7 +6,15 @@ Mojo::Server::DaemonControl - A Mojolicious daemon manager
 
 ## Commmand line
 
-    $ mojodctl --workers 4 --listen 'http://*:8080' /path/to/my-mojo-app.pl;
+    # Start a server
+    $ mojodctl -l 'http://*:8080' -P /tmp/myapp.pid -w 4 /path/to/myapp.pl;
+
+    # Running mojodctl with the same PID file will hot reload a running server
+    # or start a new if it is not running
+    $ mojodctl -l 'http://*:8080' -P /tmp/myapp.pid -w 4 /path/to/myapp.pl;
+
+    # For more options
+    $ mojodctl --help
 
 ## Perl API
 
@@ -77,6 +85,17 @@ Will prevent existing workers from accepting new connections and eventually
 stop them, and start new workers in a fresh environment that handles the new
 connections. The manager process will remain the same.
 
+    $ mojodctl
+      |- my-app.pl-1647405707
+      |- my-app.pl-1647405707
+      |- my-app.pl-1647405707
+      |- my-app.pl
+      |- my-app.pl
+      '- my-app.pl
+
+EXPERIMENTAL: The workers that waits to be stopped will have a timestamp
+appended to `$0` to illustrate which is new and which is old.
+
 # ATTRIBUTES
 
 [Mojo::Server::DaemonControl](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl) inherits all attributes from
@@ -131,8 +150,8 @@ A [Mojo::Log](https://metacpan.org/pod/Mojo%3A%3ALog) object used for logging.
 
 A [Mojo::File](https://metacpan.org/pod/Mojo%3A%3AFile) object with the path to the pid file.
 
-Note that the PID file must end with ".pid"! Default path is
-"$EUID-mojodctl.pid" in ["tmpdir" in File::Spec](https://metacpan.org/pod/File%3A%3ASpec#tmpdir).
+Note that the PID file must end with ".pid"! Default path is "mojodctl.pid" in
+["tmpdir" in File::Spec](https://metacpan.org/pod/File%3A%3ASpec#tmpdir).
 
 ## workers
 
@@ -158,7 +177,7 @@ Holds a [IO::Socket::UNIX](https://metacpan.org/pod/IO%3A%3ASocket%3A%3AUNIX) ob
     $int = $dctl->check_pid;
 
 Returns the PID of the running process documented in ["pid\_file"](#pid_file) or zero (0)
-if is is not running.
+if it is not running.
 
 ## ensure\_pid\_file
 
