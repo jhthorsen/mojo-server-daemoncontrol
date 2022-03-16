@@ -219,6 +219,23 @@ Mojo::Server::DaemonControl - A Mojolicious daemon manager
 
   $dctl->run('/path/to/my-mojo-app.pl');
 
+=head2 Mojolicious application
+
+It is possible to use the L<Mojolicious/before_server_start> hook to change
+server settings. The C<$app> is also available, meaning the values can be read
+from a config file. See L<Mojo::Server::DaemonControl::Worker> and
+L<Mojo::Server::Daemon> for more information about what to tweak.
+
+  use Mojolicious::Lite -signatures;
+
+  app->hook(before_server_start => sub ($server, $app) {
+    if ($sever->isa('Mojo::Server::DaemonControl::Worker')) {
+      $server->inactivity_timeout(60);
+      $server->max_clients(100);
+      $server->max_requests(10);
+    }
+  });
+
 =head1 DESCRIPTION
 
 L<Mojo::Server::DaemonControl> is not a web server. Instead it manages one or
@@ -259,7 +276,9 @@ Decrease worker pool by one.
 
 =head2 USR2
 
-TODO: Zero downtime software upgrade.
+Will prevent existing workers from accepting new connections and eventually
+stop them, and start new workers in a fresh environment that handles the new
+connections. The manager process will remain the same.
 
 =head1 ATTRIBUTES
 
