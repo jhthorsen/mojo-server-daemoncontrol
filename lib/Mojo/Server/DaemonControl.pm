@@ -74,8 +74,7 @@ sub _build_log ($self) {
 }
 
 sub _build_pid_file ($self) {
-  my $basename = sprintf '%s-mojo-daemon-control.pid', $ENV{HARNESS_ACTIVE} ? $$ : $>;
-  return path(tmpdir, $basename);
+  return path tmpdir, sprintf '%s-mojodctl.pid', $ENV{HARNESS_ACTIVE} ? $$ : $>;
 }
 
 sub _build_worker_pipe ($self) {

@@ -34,7 +34,7 @@ $daemon->run($app);
   Usage: mojodctcl [OPTIONS] [APPLICATION]
 
     mojodctcl ./script/my_app
-    mojodctcl -m production -l -l http://127.0.0.1:3000 ./myapp.pl
+    mojodctcl -m production -l http://127.0.0.1:8080 ./myapp.pl
 
   Options:
     -G, --graceful-timeout <seconds>     Graceful timeout, defaults to 120.
