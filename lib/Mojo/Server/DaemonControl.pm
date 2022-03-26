@@ -12,7 +12,7 @@ use Mojo::Util qw(steady_time);
 use POSIX qw(WNOHANG);
 use Scalar::Util qw(weaken);
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 # This should be considered internal for now
 our $MOJODCTL = do {
