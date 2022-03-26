@@ -157,6 +157,7 @@ sub _read_heartbeat ($self) {
   my $time = steady_time;
   while ($chunk =~ /(\d+):(\w)\n/g) {
     next unless my $w = $self->{pool}{$1};
+    ($w->{killed} = $time), $self->log->fatal("Worker $w->{pid} forced killed") if $2 eq 'k';
     $w->{graceful} ||= $time if $2 eq 'g';
     $w->{time} = $time;
     $self->emit(heartbeat => $w);
@@ -172,6 +173,7 @@ sub _spawn ($self, $app) {
   } @{$self->listen};
 
   # Parent
+  my $ppid = $$;
   die "Can't fork: $!" unless defined(my $pid = fork);
   return $self->emit(spawn => $self->{pool}{$pid} = {pid => $pid, time => steady_time}) if $pid;
 
@@ -179,6 +181,7 @@ sub _spawn ($self, $app) {
   $ENV{MOJO_SERVER_DAEMON_HEARTBEAT_INTERVAL} = $self->heartbeat_interval;
   $ENV{MOJO_SERVER_DAEMON_CONTROL_CLASS}      = 'Mojo::Server::DaemonControl::Worker';
   $ENV{MOJO_SERVER_DAEMON_CONTROL_SOCK}       = $self->worker_pipe->hostpath;
+  $ENV{MOJO_SERVER_DAEMON_PID}                = $ppid;
   $self->log->debug("Exec $^X $MOJODCTL $app daemon @args");
   exec $^X, $MOJODCTL => $app => daemon => @args;
   die "Could not exec $app: $!";

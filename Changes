@@ -1,5 +1,8 @@
 Revision history for perl distribution Mojo-Server-DaemonControl
 
+0.02 Not Released
+ - Force stop worker if parent pid changes
+
 0.01 2022-03-21T17:31:19+0900
  - Add "mojodctl" manager program
  - Add custom "daemon" worker class
