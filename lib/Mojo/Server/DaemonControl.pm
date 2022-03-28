@@ -45,10 +45,16 @@ sub ensure_pid_file ($self) {
   return $file->spurt("$pid\n")->chmod(0644) && $self;
 }
 
+sub reload ($self, $app) {
+  return _errno(3) unless my $pid = $self->check_pid;
+  $self->log->info("Starting hot deployment of $pid.");
+  return kill(USR2 => $pid) ? _errno(0) : _errno(1);
+}
+
 sub run ($self, $app) {
   if (my $pid = $self->check_pid) {
-    $self->log->info("Starting hot deployment of $pid.");
-    return kill(USR2 => $pid) ? 0 : 1;
+    $self->log->info("Manager for $app is already running ($pid).");
+    return _errno(16);
   }
 
   weaken $self;
@@ -67,6 +73,7 @@ sub run ($self, $app) {
   $self->log->info("Manager for $app started");
   $self->_manage($app) while $self->{running};
   $self->log->info("Manager for $app stopped");
+  return _errno(0);
 }
 
 sub stop ($self, $signal = 'TERM') {
@@ -100,6 +107,8 @@ sub _build_worker_pipe ($self) {
   return IO::Socket::UNIX->new(Listen => 1, Local => $path, Type => SOCK_DGRAM)
     || die "Can't create a worker pipe: $@";
 }
+
+sub _errno ($n) { $! = $n }
 
 sub _hot_deploy ($self) {
   $self->log->info('Starting hot deployment.');
@@ -228,12 +237,11 @@ Mojo::Server::DaemonControl - A Mojolicious daemon manager
 
 =head2 Commmand line
 
-  # Start a server
+  # Start the manager
   $ mojodctl -l 'http://*:8080' -P /tmp/myapp.pid -w 4 /path/to/myapp.pl;
 
-  # Running mojodctl with the same PID file will hot reload a running server
-  # or start a new if it is not running
-  $ mojodctl -l 'http://*:8080' -P /tmp/myapp.pid -w 4 /path/to/myapp.pl;
+  # Reload the manager
+  $ mojodctl -R -P /tmp/myapp.pid /path/to/myapp.pl;
 
   # For more options
   $ mojodctl --help
@@ -455,9 +463,15 @@ if it is not running.
 
 Makes sure L</pid_file> exists and contains the current PID.
 
+=head2 reload
+
+  $int = $dctl->reload($app);
+
+Tries to reload a running instance by sending L</USR2> to L</pid_file>.
+
 =head2 run
 
-  $dctl->run($app);
+  $int = $dctl->run($app);
 
 Run the menager and wait for L</SIGNALS>. Note that C<$app> is not loaded in
 the manager process, which means that each worker does not share any code or
