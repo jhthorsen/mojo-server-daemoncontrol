@@ -21,13 +21,13 @@ our $MOJODCTL = do {
   -x $x ? $x : 'mojodctl';
 };
 
-has graceful_timeout   => 120;
-has heartbeat_interval => 5;
-has heartbeat_timeout  => 50;
-has listen             => sub ($self) { [Mojo::URL->new('http://*:8080')] };
+has graceful_timeout   => sub ($self) { $ENV{MOJODCTL_GRACEFUL_TIMEOUT}   || 120 };
+has heartbeat_interval => sub ($self) { $ENV{MOJODCTL_HEARTBEAT_INTERVAL} || 5 };
+has heartbeat_timeout  => sub ($self) { $ENV{MOJODCTL_HEARTBEAT_TIMEOUT}  || 50 };
+has listen             => sub ($self) { $self->_build_listen };
 has log                => sub ($self) { $self->_build_log };
-has pid_file           => sub ($self) { path tmpdir, basename($0) . '.pid' };
-has workers            => 4;
+has pid_file           => sub ($self) { $self->_build_pid_file };
+has workers            => sub ($self) { $ENV{MOJODCTL_WORKERS} || 4 };
 has worker_pipe        => sub ($self) { $self->_build_worker_pipe };
 
 sub check_pid ($self) {
@@ -75,10 +75,22 @@ sub stop ($self, $signal = 'TERM') {
   return $self->emit(stop => $signal);
 }
 
+sub _build_listen ($self) {
+  return [map { Mojo::URL->new($_) } split ',', $ENV{MOJODCTL_LISTEN} || 'http://*:8080'];
+}
+
 sub _build_log ($self) {
-  $ENV{MOJO_LOG_LEVEL}
+  $ENV{MOJODCTL_LOG_LEVEL}
     ||= $ENV{HARNESS_IS_VERBOSE} ? 'debug' : $ENV{HARNESS_ACTIVE} ? 'error' : 'info';
-  return Mojo::Log->new(level => $ENV{MOJO_LOG_LEVEL});
+  $ENV{MOJO_LOG_LEVEL} ||= $ENV{MOJODCTL_LOG_LEVEL};
+  my $log = Mojo::Log->new(level => $ENV{MOJODCTL_LOG_LEVEL});
+  $log->path($ENV{MOJODCTL_LOG_FILE}) if $ENV{MOJODCTL_LOG_FILE};
+  return $log;
+}
+
+sub _build_pid_file ($self) {
+  return path($ENV{MOJODCTL_PID_FILE}) if $ENV{MOJODCTL_PID_FILE};
+  return path(tmpdir, basename($0) . '.pid');
 }
 
 sub _build_worker_pipe ($self) {
@@ -178,10 +190,10 @@ sub _spawn ($self, $app) {
   return $self->emit(spawn => $self->{pool}{$pid} = {pid => $pid, time => steady_time}) if $pid;
 
   # Child
-  $ENV{MOJO_SERVER_DAEMON_HEARTBEAT_INTERVAL} = $self->heartbeat_interval;
-  $ENV{MOJO_SERVER_DAEMON_CONTROL_CLASS}      = 'Mojo::Server::DaemonControl::Worker';
-  $ENV{MOJO_SERVER_DAEMON_CONTROL_SOCK}       = $self->worker_pipe->hostpath;
-  $ENV{MOJO_SERVER_DAEMON_PID}                = $ppid;
+  $ENV{MOJODCTL_HEARTBEAT_INTERVAL} = $self->heartbeat_interval;
+  $ENV{MOJODCTL_CONTROL_CLASS}      = 'Mojo::Server::DaemonControl::Worker';
+  $ENV{MOJODCTL_CONTROL_SOCK}       = $self->worker_pipe->hostpath;
+  $ENV{MOJODCTL_PID}                = $ppid;
   $self->log->debug("Exec $^X $MOJODCTL $app daemon @args");
   exec $^X, $MOJODCTL => $app => daemon => @args;
   die "Could not exec $app: $!";
@@ -273,6 +285,51 @@ code run, while new processes are deployed.
 
 Note that L<Mojo::Server::DaemonControl> is currently EXPERIMENTAL and it has
 not been tested in production yet. Feedback is more than welcome.
+
+=head1 ENVIRONMENT VARIABLES
+
+Some environment variables can be set in C<systemd> service files, while other
+can be useful to be read when initializing your web server.
+
+=head2 MOJODCTL_CONTROL_CLASS
+
+This environment variable will be set to L<Mojo::Server::DaemonControl::Worker>
+inside the worker process.
+
+=head2 MOJODCTL_GRACEFUL_TIMEOUT
+
+Can be used to set the default value for L</graceful_timeout>.
+
+=head2 MOJODCTL_HEARTBEAT_INTERVAL
+
+Can be used to set the default value for L</heartbeat_interval> and will be set
+to ensure a default value for L<Mojo::Server::DaemonControl::Worker/heartbeat_interval>.
+
+=head2 MOJODCTL_HEARTBEAT_TIMEOUT
+
+Can be used to set the default value for L</heartbeat_timeout>.
+
+=head2 MOJODCTL_LISTEN
+
+Can be used to set the default value for L</listen>. The environment variable
+will be split on comma for multiple listen addresses.
+
+=head2 MOJODCTL_LOG_FILE
+
+By default the log will be written to STDERR. It is possible to set this
+environment variable to log to a file instead.
+
+=head2 MOJODCTL_LOG_LEVEL
+
+Can be set to debug, info, warn, error, fatal. Default log level is "info".
+
+=head2 MOJODCTL_PID_FILE
+
+Can be used to set a default value for L</pid_file>.
+
+=head2 MOJODCTL_WORKERS
+
+Can be used to set a default value for L</workers>.
 
 =head1 SIGNALS
 

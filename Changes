@@ -1,5 +1,8 @@
 Revision history for perl distribution Mojo-Server-DaemonControl
 
+0.03 Not Released
+ - Add support for config from environment variables
+
 0.02 2022-03-26T10:47:29+0900
  - Force stop worker if parent pid changes
 

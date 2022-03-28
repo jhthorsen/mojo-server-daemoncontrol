@@ -4,8 +4,8 @@ use Mojo::Base 'Mojo::Server::Daemon', -signatures;
 use IO::Socket::UNIX;
 use Scalar::Util qw(weaken);
 
-has heartbeat_interval => sub ($self) { $ENV{MOJO_SERVER_DAEMON_HEARTBEAT_INTERVAL} || 5 };
-has manager_pid        => sub ($self) { $ENV{MOJO_SERVER_DAEMON_PID}                || getppid };
+has heartbeat_interval => sub ($self) { $ENV{MOJODCTL_HEARTBEAT_INTERVAL} || 5 };
+has manager_pid        => sub ($self) { $ENV{MOJODCTL_PID}                || getppid };
 has silent             => 1;
 has worker_pipe        => sub ($self) { $self->_build_worker_pipe };
 
@@ -22,8 +22,8 @@ sub run ($self, $app, @) {
 }
 
 sub _build_worker_pipe ($self) {
-  my $path = $ENV{MOJO_SERVER_DAEMON_CONTROL_SOCK}
-    || die "Can't create a worker pipe: MOJO_SERVER_DAEMON_CONTROL_SOCK not set";
+  my $path = $ENV{MOJODCTL_CONTROL_SOCK}
+    || die "Can't create a worker pipe: MOJODCTL_CONTROL_SOCK not set";
   return IO::Socket::UNIX->new(Peer => $path, Type => SOCK_DGRAM)
     || die "Can't create a worker pipe: $@";
 }
@@ -113,8 +113,8 @@ Changes the default in L<Mojo::Server::Daemon/silent> to 1.
   $socket = $daemon->worker_pipe;
 
 Holds a L<IO::Socket::UNIX> object used to communicate with the manager. The
-default socket path is read from the C<MOJO_SERVER_DAEMON_CONTROL_SOCK>
-environment variable.
+default socket path is read from the C<MOJODCTL_CONTROL_SOCK> environment
+variable.
 
 =head1 METHODS
 
