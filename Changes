@@ -1,6 +1,6 @@
 Revision history for perl distribution Mojo-Server-DaemonControl
 
-0.03 Not Released
+0.03 2022-03-28T13:35:55+0900
  - Add support for config from environment variables
  - Changed hot deployment to be done explicit
 

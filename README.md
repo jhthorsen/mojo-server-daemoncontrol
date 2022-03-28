@@ -6,12 +6,11 @@ Mojo::Server::DaemonControl - A Mojolicious daemon manager
 
 ## Commmand line
 
-    # Start a server
+    # Start the manager
     $ mojodctl -l 'http://*:8080' -P /tmp/myapp.pid -w 4 /path/to/myapp.pl;
 
-    # Running mojodctl with the same PID file will hot reload a running server
-    # or start a new if it is not running
-    $ mojodctl -l 'http://*:8080' -P /tmp/myapp.pid -w 4 /path/to/myapp.pl;
+    # Reload the manager
+    $ mojodctl -R -P /tmp/myapp.pid /path/to/myapp.pl;
 
     # For more options
     $ mojodctl --help
@@ -63,6 +62,51 @@ code run, while new processes are deployed.
 
 Note that [Mojo::Server::DaemonControl](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl) is currently EXPERIMENTAL and it has
 not been tested in production yet. Feedback is more than welcome.
+
+# ENVIRONMENT VARIABLES
+
+Some environment variables can be set in `systemd` service files, while other
+can be useful to be read when initializing your web server.
+
+## MOJODCTL\_CONTROL\_CLASS
+
+This environment variable will be set to [Mojo::Server::DaemonControl::Worker](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl%3A%3AWorker)
+inside the worker process.
+
+## MOJODCTL\_GRACEFUL\_TIMEOUT
+
+Can be used to set the default value for ["graceful\_timeout"](#graceful_timeout).
+
+## MOJODCTL\_HEARTBEAT\_INTERVAL
+
+Can be used to set the default value for ["heartbeat\_interval"](#heartbeat_interval) and will be set
+to ensure a default value for ["heartbeat\_interval" in Mojo::Server::DaemonControl::Worker](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl%3A%3AWorker#heartbeat_interval).
+
+## MOJODCTL\_HEARTBEAT\_TIMEOUT
+
+Can be used to set the default value for ["heartbeat\_timeout"](#heartbeat_timeout).
+
+## MOJODCTL\_LISTEN
+
+Can be used to set the default value for ["listen"](#listen). The environment variable
+will be split on comma for multiple listen addresses.
+
+## MOJODCTL\_LOG\_FILE
+
+By default the log will be written to STDERR. It is possible to set this
+environment variable to log to a file instead.
+
+## MOJODCTL\_LOG\_LEVEL
+
+Can be set to debug, info, warn, error, fatal. Default log level is "info".
+
+## MOJODCTL\_PID\_FILE
+
+Can be used to set a default value for ["pid\_file"](#pid_file).
+
+## MOJODCTL\_WORKERS
+
+Can be used to set a default value for ["workers"](#workers).
 
 # SIGNALS
 
@@ -188,9 +232,15 @@ if it is not running.
 
 Makes sure ["pid\_file"](#pid_file) exists and contains the current PID.
 
+## reload
+
+    $int = $dctl->reload($app);
+
+Tries to reload a running instance by sending ["USR2"](#usr2) to ["pid\_file"](#pid_file).
+
 ## run
 
-    $dctl->run($app);
+    $int = $dctl->run($app);
 
 Run the menager and wait for ["SIGNALS"](#signals). Note that `$app` is not loaded in
 the manager process, which means that each worker does not share any code or
