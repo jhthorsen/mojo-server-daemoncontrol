@@ -15,8 +15,8 @@ my $listen = Mojo::URL->new(sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server-
 subtest 'force quit worker' => sub {
   my $dctl = Mojo::Server::DaemonControl->new(heartbeat_interval => 0.5, listen => [$listen],
     workers => 1);
-  my $w;
 
+  my $w;
   $dctl->on(heartbeat => sub { run_slow_request_in_fork() unless $w; $w ||= $_[1] });
   $dctl->on(reap      => sub { $w = $_[1];                           $dctl->stop });
   $dctl->run($app);
@@ -27,6 +27,6 @@ done_testing;
 
 sub run_slow_request_in_fork {
   return if fork;
-  Mojo::UserAgent->new->get($listen->clone->path('/ppid/1'));
+  Mojo::UserAgent->new->get($listen->clone->path(sprintf '/ppid/%s', $$ - 1));
   exit 0;
 }

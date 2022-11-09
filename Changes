@@ -1,5 +1,9 @@
 Revision history for perl distribution Mojo-Server-DaemonControl
 
+0.04 Not Released
+ - Heartbeat messages goes through a file descriptior instead of "worker_pipe"
+ - Removed worker_pipe() attribute
+
 0.03 2022-03-28T13:35:55+0900
  - Add support for config from environment variables
  - Changed hot deployment to be done explicit
