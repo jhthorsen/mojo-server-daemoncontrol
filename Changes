@@ -1,6 +1,8 @@
 Revision history for perl distribution Mojo-Server-DaemonControl
 
 0.04 Not Released
+ - Fix not rejecting connections when issuing hot deploy
+ - Changed from using "reuse" to passing on "fd" to worker
  - Heartbeat messages goes through a file descriptior instead of "worker_pipe"
  - Removed worker_pipe() attribute
 

@@ -7,6 +7,7 @@ use File::Spec::Functions qw(tmpdir);
 use IO::Select;
 use Mojo::File qw(curfile path);
 use Mojo::Log;
+use Mojo::Server::Daemon;
 use Mojo::URL;
 use Mojo::Util   qw(steady_time);
 use POSIX        qw(WNOHANG);
@@ -28,6 +29,15 @@ has listen             => sub ($self) { $self->_build_listen };
 has log                => sub ($self) { $self->_build_log };
 has pid_file           => sub ($self) { $self->_build_pid_file };
 has workers            => sub ($self) { $ENV{MOJODCTL_WORKERS} || 4 };
+
+has _daemon => sub { Mojo::Server::Daemon->new(silent => 1) };
+
+has _fd => sub ($self) {
+  my $daemon = $self->_daemon;
+  my $loop   = $daemon->ioloop;
+  $daemon->listen($self->listen)->start->stop;
+  return [map { fileno(_keep_open_on_exec($loop->acceptor($_)->handle)) } @{$daemon->acceptors}];
+};
 
 sub check_pid ($self) {
   return 0 unless my $pid = -r $self->pid_file && $self->pid_file->slurp;
@@ -65,6 +75,7 @@ sub run ($self, $app) {
   local $SIG{TTOU} = sub { $self->_inc_workers(-1) };
   local $SIG{USR2} = sub { $self->_hot_deploy };
 
+  $self->_fd;
   $self->_create_heartbeat_pipe;
 
   $self->{pool} ||= {};
@@ -148,32 +159,43 @@ sub _manage ($self, $app) {
   my $pool = $self->{pool};
   if (my $signal = $self->{stop_signal}) {
     return delete @$self{qw(running stop_signal)} unless keys %$pool;    # Fully stopped
-    return map { $_->{$signal} || $self->_kill($signal => $_) } values %{$self->{pool}};
+    return map { $_->{$signal} || $self->_kill($signal => $_) } values %$pool;
   }
 
-  # Make sure we have enough workers and a pid file
-  my $need = $self->workers - int grep { !$_->{graceful} } values %$pool;
-  $self->log->debug("Manager starting $need workers") if $need > 0;
-  $self->_spawn($app) while !$self->{stop_signal} && $need-- > 0;
+  # Make sure we have a PID file
   $self->ensure_pid_file;
 
-  # Keep track of worker health
-  my $gt   = $self->graceful_timeout;
+  # Figure out worker health
   my $ht   = $self->heartbeat_timeout;
   my $time = steady_time;
-  for my $pid (keys %$pool) {
-    next unless my $w = $pool->{$pid};
+  my (@graceful, @healthy, @starting);
+  for my $pid (sort keys %$pool) {
+    my $w = $pool->{$pid} or next;
+    if    ($w->{graceful})            { push @graceful, $pid }
+    elsif (!$w->{time})               { push @starting, $pid }
+    elsif ($w->{time} + $ht <= $time) { $w->{graceful} //= $time; push @graceful, $pid }
+    else                              { push @healthy, $pid }
+  }
 
-    if (!$w->{graceful} and $w->{time} + $ht <= $time) {
-      $w->{graceful} = $time;
-      $self->log->error("Worker $pid has no heartbeat");
-    }
-
-    if ($gt and $w->{graceful} and $w->{graceful} + $gt < $time) {
-      $self->_kill(KILL => $w, 'with no heartbeat');
-    }
-    elsif ($w->{graceful}) {
-      $self->_kill(QUIT => $w, 'gracefully');
+  # Start or stop workers based on worker health
+  my $n_missing = $self->workers - (@healthy + @starting);
+  if ($n_missing > 0) {
+    local $" = ',';
+    $self->log->info("Manager starting $n_missing workers (graceful=@graceful healthy=@healthy)");
+    $self->_spawn($app) while !$self->{stop_signal} && $n_missing-- > 0;
+  }
+  elsif (!@starting) {
+    local $" = ',';
+    $self->log->debug("Manager has graceful=@graceful healthy=@healthy");
+    my $gt = $self->graceful_timeout;
+    for my $pid (@graceful) {
+      next unless my $w = $pool->{$pid};
+      if ($gt && $w->{graceful} + $gt < $time) {
+        $self->_kill(KILL => $w, 'with no heartbeat');
+      }
+      else {
+        $self->_kill(QUIT => $w, 'gracefully');
+      }
     }
   }
 }
@@ -195,10 +217,10 @@ sub _read_heartbeat ($self) {
 }
 
 sub _spawn ($self, $app) {
-  my @args;
-  push @args, map {
+  my @fd   = @{$self->_fd};
+  my @args = map {
     my $url = $_->clone;
-    $url->query->param(reuse => 1);
+    $url->query->param(fd => shift @fd);
     (-l => $url->to_string);
   } @{$self->listen};
 
@@ -279,13 +301,7 @@ L<Mojo::Server::Daemon> for more information about what to tweak.
 =head1 DESCRIPTION
 
 L<Mojo::Server::DaemonControl> is not a web server. Instead it manages one or
-more L<Mojo::Server::Daemon> processes that can handle web requests. Each of
-these servers are started with L<SO_REUSEPORT|Mojo::Server::Daemon/reuse>
-enabled.
-
-This means it is only supported on systems that support
-L<SO_REUSEPORT|https://lwn.net/Articles/542629/>. It also does not support fork
-emulation. It should work on most modern Linux based systems though.
+more L<Mojo::Server::Daemon> processes that can handle web requests.
 
 This server is an alternative to L<Mojo::Server::Hypnotoad> where each of the
 workers handle long running (WebSocket) requests. The main difference is that a
@@ -416,7 +432,7 @@ this amount of time.
 An array-ref of L<Mojo::URL> objects for what to listen to. See
 L<Mojo::Server::Daemon/listen> for supported values.
 
-The C<reuse=1> query parameter will be added automatically before starting the
+The C<fd> query parameter will be added automatically before starting the
 L<Mojo::Server::Daemon> sub process.
 
 =head2 log
