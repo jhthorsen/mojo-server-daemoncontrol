@@ -191,7 +191,7 @@ sub _spawn ($self, $app) {
   $ENV{MOJODCTL_HEARTBEAT_FD}       = fileno $self->{worker_write};
   $ENV{MOJODCTL_HEARTBEAT_INTERVAL} = $self->heartbeat_interval;
 
-  my @args;
+  my (@urls, @args) = @{$self->listen};
   for my $fh ($self->{worker_write}, @{$self->_listen_handles}) {
 
     # Remove close-on-exec flag
@@ -200,7 +200,7 @@ sub _spawn ($self, $app) {
     fcntl $fh, F_SETFD, $flags & ~FD_CLOEXEC or die "fcntl F_SETFD: $!";
 
     next if $fh eq $self->{worker_write};
-    my $url = Mojo::URL->new('http://127.0.0.1');
+    my $url = Mojo::URL->new(shift @urls);
     $url->query->param(fd => fileno $fh);
     push @args, -l => $url->to_string;
   }
