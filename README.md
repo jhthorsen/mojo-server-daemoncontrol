@@ -55,16 +55,6 @@ code run, while new processes are deployed.
 Note that [Mojo::Server::DaemonControl](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl) is currently EXPERIMENTAL and it has
 not been tested in production yet. Feedback is more than welcome.
 
-# ENVIRONMENT VARIABLES
-
-Some environment variables can be set in `systemd` service files, while other
-can be useful to be read when initializing your web server.
-
-## MOJODCTL\_CONTROL\_CLASS
-
-This environment variable will be set to [Mojo::Server::DaemonControl::Worker](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl%3A%3AWorker)
-inside the worker process.
-
 # SIGNALS
 
 ## INT, TERM
@@ -104,6 +94,14 @@ appended to `$0` to illustrate which is new and which is old.
 
 [Mojo::Server::DaemonControl](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl) inherits all attributes from
 [Mojo::EventEmitter](https://metacpan.org/pod/Mojo%3A%3AEventEmitter) and implements the following ones.
+
+## cleanup
+
+    $bool = $dctl->cleanup;
+    $dctl = $dctl->cleanup(1);
+
+Set this to true and [Mojo::Server::DaemonControl](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl) will remove ["pid\_file"](#pid_file)
+when this object goes out of scope.
 
 ## graceful\_timeout
 

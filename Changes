@@ -1,6 +1,6 @@
 Revision history for perl distribution Mojo-Server-DaemonControl
 
-0.05 Not Released
+0.05 2022-11-10T20:13:53
  - Fix listening to https://
  - Add documentation for "cleanup" attribute
  - Removed MOJODCTL_CONTROL_CLASS from documentation
