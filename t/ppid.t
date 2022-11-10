@@ -18,7 +18,7 @@ subtest 'force quit worker' => sub {
 
   my $w;
   $dctl->on(heartbeat => sub { run_slow_request_in_fork() unless $w; $w ||= $_[1] });
-  $dctl->on(reap      => sub { $w = $_[1];                           $dctl->stop });
+  $dctl->on(reap      => sub { $w = $_[1];                           shift->stop });
   $dctl->run($app);
   ok $w->{killed}, 'forced killed' or diag Mojo::Util::dumper($w);
 };

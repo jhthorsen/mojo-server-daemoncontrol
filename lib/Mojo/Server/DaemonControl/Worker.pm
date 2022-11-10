@@ -38,7 +38,6 @@ sub _heartbeat_tick ($self) {
 
 sub _stop_gracefully ($self) {
   my $loop = $self->ioloop;
-  $self->app->log->debug('Stopping gracefully (SIGQUIT)');
   $loop->remove(delete $self->{heartbeat_tid}) if $self->{heartbeat_tid};
   $loop->stop_gracefully;
   $self->_heartbeat('g');

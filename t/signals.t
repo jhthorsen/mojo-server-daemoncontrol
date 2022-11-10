@@ -3,14 +3,16 @@ use Test2::V0;
 use Mojo::File qw(curfile);
 use Mojo::Server::DaemonControl;
 
-my $app = curfile->sibling('myapp.pl')->to_abs->to_string;
+plan skip_all => 'TEST_LIVE=1' unless $ENV{TEST_LIVE};
+
+my $app    = curfile->sibling('myapp.pl')->to_abs->to_string;
 
 subtest 'Stop manager with signal' => sub {
   my $dctl = dctl(workers => 1);
   my @stop;
   for my $sig (qw(INT QUIT TERM)) {
-    $dctl->once(stop  => sub { push @stop, $_[1] });
-    $dctl->once(start => sub { kill $sig => $$ });
+    $dctl->once(stop      => sub { push @stop, $_[1] });
+    $dctl->once(heartbeat => sub { kill $sig => $$ });
     $dctl->run($app);
   }
 
