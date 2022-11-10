@@ -18,9 +18,7 @@ Mojo::Server::DaemonControl - A Mojolicious daemon manager
 ## Perl API
 
     use Mojo::Server::DaemonControl;
-    my $listen = Mojo::URL->new('http://*:8080');
-    my $dctl   = Mojo::Server::DaemonControl->new(listen => [$listen], workers => 4);
-
+    my $dctl = Mojo::Server::DaemonControl->new(listen => ['http://*:8080'], workers => 4);
     $dctl->run('/path/to/my-mojo-app.pl');
 
 ## Mojolicious application
@@ -43,13 +41,7 @@ from a config file. See [Mojo::Server::DaemonControl::Worker](https://metacpan.o
 # DESCRIPTION
 
 [Mojo::Server::DaemonControl](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl) is not a web server. Instead it manages one or
-more [Mojo::Server::Daemon](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemon) processes that can handle web requests. Each of
-these servers are started with [SO\_REUSEPORT](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemon#reuse)
-enabled.
-
-This means it is only supported on systems that support
-[SO\_REUSEPORT](https://lwn.net/Articles/542629/). It also does not support fork
-emulation. It should work on most modern Linux based systems though.
+more [Mojo::Server::Daemon](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemon) processes that can handle web requests.
 
 This server is an alternative to [Mojo::Server::Hypnotoad](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3AHypnotoad) where each of the
 workers handle long running (WebSocket) requests. The main difference is that a
@@ -72,41 +64,6 @@ can be useful to be read when initializing your web server.
 
 This environment variable will be set to [Mojo::Server::DaemonControl::Worker](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl%3A%3AWorker)
 inside the worker process.
-
-## MOJODCTL\_GRACEFUL\_TIMEOUT
-
-Can be used to set the default value for ["graceful\_timeout"](#graceful_timeout).
-
-## MOJODCTL\_HEARTBEAT\_INTERVAL
-
-Can be used to set the default value for ["heartbeat\_interval"](#heartbeat_interval) and will be set
-to ensure a default value for ["heartbeat\_interval" in Mojo::Server::DaemonControl::Worker](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl%3A%3AWorker#heartbeat_interval).
-
-## MOJODCTL\_HEARTBEAT\_TIMEOUT
-
-Can be used to set the default value for ["heartbeat\_timeout"](#heartbeat_timeout).
-
-## MOJODCTL\_LISTEN
-
-Can be used to set the default value for ["listen"](#listen). The environment variable
-will be split on comma for multiple listen addresses.
-
-## MOJODCTL\_LOG\_FILE
-
-By default the log will be written to STDERR. It is possible to set this
-environment variable to log to a file instead.
-
-## MOJODCTL\_LOG\_LEVEL
-
-Can be set to debug, info, warn, error, fatal. Default log level is "info".
-
-## MOJODCTL\_PID\_FILE
-
-Can be used to set a default value for ["pid\_file"](#pid_file).
-
-## MOJODCTL\_WORKERS
-
-Can be used to set a default value for ["workers"](#workers).
 
 # SIGNALS
 
@@ -175,13 +132,10 @@ this amount of time.
 ## listen
 
     $array_ref = $dctl->listen;
-    $dctl      = $dctl->listen([Mojo::URL->new]);
+    $dctl      = $dctl->listen(['http://127.0.0.1:3000']);
 
-An array-ref of [Mojo::URL](https://metacpan.org/pod/Mojo%3A%3AURL) objects for what to listen to. See
-["listen" in Mojo::Server::Daemon](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemon#listen) for supported values.
-
-The `reuse=1` query parameter will be added automatically before starting the
-[Mojo::Server::Daemon](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemon) sub process.
+Array reference with one or more locations to listen on.
+See ["listen" in Mojo::Server::Daemon](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemon#listen) for more details.
 
 ## log
 
@@ -208,12 +162,6 @@ Note that the PID file must end with ".pid"! Default path is "mojodctl.pid" in
 Number of worker processes, defaults to 4. See ["workers" in Mojo::Server::Prefork](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3APrefork#workers)
 for more details.
 
-## worker\_pipe
-
-    $socket = $dctl->worker_pipe;
-
-Holds a [IO::Socket::UNIX](https://metacpan.org/pod/IO%3A%3ASocket%3A%3AUNIX) object used to communicate with workers.
-
 # METHODS
 
 [Mojo::Server::DaemonControl](https://metacpan.org/pod/Mojo%3A%3AServer%3A%3ADaemonControl) inherits all methods from
@@ -228,7 +176,7 @@ if it is not running.
 
 ## ensure\_pid\_file
 
-    $dctl->ensure_pid_file;
+    $dctl->ensure_pid_file($pid);
 
 Makes sure ["pid\_file"](#pid_file) exists and contains the current PID.
 

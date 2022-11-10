@@ -10,7 +10,7 @@ use Mojo::Util qw(steady_time);
 use Mojolicious;
 use POSIX qw(WNOHANG);
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 # This should be considered internal for now
 our $MOJODCTL = do {
