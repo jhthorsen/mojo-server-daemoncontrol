@@ -10,7 +10,7 @@ use Time::HiRes qw(time);
 plan skip_all => 'TEST_LIVE=1' unless $ENV{TEST_LIVE};
 
 my $app    = curfile->dirname->child('myapp.pl');
-my $listen = Mojo::URL->new(sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server->generate_port);
+my $listen = sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server->generate_port;
 my $t0;
 
 subtest 'stop workers gracefully' => sub {
@@ -41,6 +41,6 @@ done_testing;
 sub run_slow_request_in_fork {
   $t0 = time;
   return if fork;
-  Mojo::UserAgent->new->get($listen->clone->path('/slow'));
+  Mojo::UserAgent->new->get("$listen/slow");
   exit 0;
 }

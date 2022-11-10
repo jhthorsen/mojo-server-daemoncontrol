@@ -10,7 +10,7 @@ use Time::HiRes qw(time);
 plan skip_all => 'TEST_LIVE=1' unless $ENV{TEST_LIVE};
 
 my $app    = curfile->dirname->child('myapp.pl');
-my $listen = Mojo::URL->new(sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server->generate_port);
+my $listen = sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server->generate_port;
 
 pipe my $UA_READ, my $UA_WRITE or die $!;
 $UA_READ->blocking(0);
@@ -57,7 +57,7 @@ sub run_request_in_fork {
   return if fork;
 
   my $ua  = Mojo::UserAgent->new;
-  my $tx  = $ua->get($listen->clone->path($path));
+  my $tx  = $ua->get("$listen$path");
   my $err = $tx->error;
   syswrite $UA_WRITE, sprintf "$path:%s:%s\n",
     $err ? ($err->{code} // 0, $err->{message}) : ($tx->res->code, $tx->res->text);

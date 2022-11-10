@@ -5,6 +5,7 @@ use Mojo::Server::DaemonControl;
 
 plan skip_all => 'TEST_LIVE=1' unless $ENV{TEST_LIVE};
 
+my $listen = sprintf 'http://127.0.0.1:%s', Mojo::IOLoop::Server->generate_port;
 my $app    = curfile->sibling('myapp.pl')->to_abs->to_string;
 
 subtest 'Stop manager with signal' => sub {
@@ -45,7 +46,7 @@ subtest 'Decrease workers' => sub {
 done_testing;
 
 sub dctl {
-  my $dctl = Mojo::Server::DaemonControl->new(@_, heartbeat_interval => 0.1);
+  my $dctl = Mojo::Server::DaemonControl->new(@_, heartbeat_interval => 0.1, listen => [$listen]);
   my $n    = 0;
   $dctl->on(heartbeat => sub { delete shift->{running} if ++$n > 10 });
   return $dctl;

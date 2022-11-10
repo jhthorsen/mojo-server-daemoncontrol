@@ -28,12 +28,6 @@ sub log                ($self, @set_to) { $self->_prefork->app->log(@set_to) }
 sub pid_file           ($self, @set_to) { $self->_prefork->pid_file(@set_to) }
 sub workers            ($self, @set_to) { $self->_prefork->workers(@set_to) }
 
-has _listen_fds => sub ($self) {
-  my ($loop, $prefork) = ($self->_prefork->ioloop, $self->_prefork);
-  $prefork->start->stop;
-  return [map { fileno(_keep_open_on_exec($loop->acceptor($_)->handle)) } @{$prefork->acceptors}];
-};
-
 has _prefork => sub ($self) {
   my $app = Mojolicious->new(log => delete $self->{log} || $self->_build_log);
   return Mojo::Server::Prefork->new(
@@ -72,7 +66,7 @@ sub run ($self, $app) {
   local $SIG{USR2} = sub { $self->_start_hot_deployment };
 
   $self->_create_worker_read_write_pipe;
-  $self->_listen_fds;    # Make sure the file descriptors are built
+  $self->_create_listen_handles;
 
   @$self{qw(pid pool running)} = ($$, {}, 1);
   $self->emit('start');
@@ -95,10 +89,17 @@ sub _build_log ($self) {
   return Mojo::Log->new(level => $level);
 }
 
+sub _create_listen_handles ($self) {
+  my ($prefork, $loop) = ($self->_prefork->start, $self->_prefork->ioloop);
+  my @fh = map { $loop->acceptor($_)->handle } @{$prefork->acceptors};
+  $prefork->stop;
+  $self->{listen_handles} = \@fh;
+  die "Did you forget to specify listen addresses?" unless @fh;
+}
+
 sub _create_worker_read_write_pipe ($self) {
   return if $self->{worker_read};
   pipe $self->{worker_read}, $self->{worker_write} or die "pipe: $!";
-  _keep_open_on_exec($self->{worker_write});
 }
 
 sub _errno ($n) { $! = $n }
@@ -107,14 +108,6 @@ sub _kill ($self, $signal, $w, $reason = "with $signal") {
   return if $w->{$signal};
   $w->{$signal} = kill($signal => $w->{pid}) // 0;
   $self->log->info("Stopping worker $w->{pid} $reason == $w->{$signal}");
-}
-
-# Remove close-on-exec flag
-# https://stackoverflow.com/questions/14351147/perl-passing-an-open-socket-across-fork-exec
-sub _keep_open_on_exec ($fh) {
-  my $flags = fcntl $fh, F_GETFD, 0 or die "fcntl F_GETFD: $!";
-  fcntl $fh, F_SETFD, $flags & ~FD_CLOEXEC or die "fcntl F_SETFD: $!";
-  return $fh;
 }
 
 sub _manage ($self, $app) {
@@ -149,12 +142,10 @@ sub _manage ($self, $app) {
   # Start or stop workers based on worker health
   my $n_missing = $self->workers - (@healthy + @starting);
   if ($n_missing > 0) {
-    local $" = ',';
     $self->log->info("Manager starting $n_missing workers (graceful=@graceful healthy=@healthy)");
     $self->_spawn($app) while !$self->{stop_signal} && $n_missing-- > 0;
   }
   elsif (!@starting) {
-    local $" = ',';
     $self->log->debug("Manager has graceful=@graceful healthy=@healthy");
     my $gt = $self->graceful_timeout;
     for my $pid (@graceful) {
@@ -186,12 +177,6 @@ sub _read_heartbeat ($self) {
 }
 
 sub _spawn ($self, $app) {
-  my @fd   = @{$self->_listen_fds};
-  my @args = map {
-    my $url = Mojo::URL->new($_);
-    $url->query->param(fd => shift @fd);
-    (-l => $url->to_string);
-  } @{$self->listen};
 
   # Parent
   die "Can't fork: $!" unless defined(my $pid = fork);
@@ -203,7 +188,21 @@ sub _spawn ($self, $app) {
   $ENV{MOJODCTL_HEARTBEAT_FD}       = fileno $self->{worker_write};
   $ENV{MOJODCTL_HEARTBEAT_INTERVAL} = $self->heartbeat_interval;
 
-  $self->log->debug("Starting $^X $MOJODCTL $app daemon @args ...");
+  my @args;
+  for my $fh ($self->{worker_write}, @{$self->{listen_handles}}) {
+
+    # Remove close-on-exec flag
+    # https://stackoverflow.com/questions/14351147/perl-passing-an-open-socket-across-fork-exec
+    my $flags = fcntl $fh, F_GETFD, 0 or die "fcntl F_GETFD: $!";
+    fcntl $fh, F_SETFD, $flags & ~FD_CLOEXEC or die "fcntl F_SETFD: $!";
+
+    next if $fh eq $self->{worker_write};
+    my $url = Mojo::URL->new('http://127.0.0.1');
+    $url->query->param(fd => fileno $fh);
+    push @args, -l => $url->to_string;
+  }
+
+  $self->log->debug("Starting $^X $MOJODCTL $app daemon @args");
   exec $^X, $MOJODCTL => $app => daemon => @args;
   die "Could not exec $app: $!";
 }
