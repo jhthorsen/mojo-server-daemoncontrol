@@ -5,7 +5,7 @@ use Fcntl qw(F_GETFD F_SETFD FD_CLOEXEC);
 use File::Spec;
 use IO::Select;
 use Mojo::File qw(curfile path);
-use Mojo::Server::Prefork;
+use Mojo::Server::Daemon;
 use Mojo::Util qw(steady_time);
 use Mojolicious;
 use POSIX qw(WNOHANG);
@@ -19,28 +19,36 @@ our $MOJODCTL = do {
   -x $x ? $x : 'mojodctl';
 };
 
-# Attribute proxies
-sub graceful_timeout   ($self, @set_to) { $self->_prefork->graceful_timeout(@set_to) }
-sub heartbeat_interval ($self, @set_to) { $self->_prefork->heartbeat_interval(@set_to) }
-sub heartbeat_timeout  ($self, @set_to) { $self->_prefork->heartbeat_timeout(@set_to) }
-sub listen             ($self, @set_to) { $self->_prefork->listen(@set_to) }
-sub log                ($self, @set_to) { $self->_prefork->app->log(@set_to) }
-sub pid_file           ($self, @set_to) { $self->_prefork->pid_file(@set_to) }
-sub workers            ($self, @set_to) { $self->_prefork->workers(@set_to) }
+has cleanup            => 0;
+has graceful_timeout   => 120;
+has heartbeat_interval => 5;
+has heartbeat_timeout  => 50;
+has listen             => sub ($self) { [split /,/, $ENV{MOJO_LISTEN} || 'http://*:8080'] };
+has log                => sub ($self) { $self->_build_log };
+has pid_file           => sub ($self) { path(File::Spec->tmpdir, path($0)->basename . '.pid') };
+has workers            => 4;
 
-has _prefork => sub ($self) {
-  my $app = Mojolicious->new(log => delete $self->{log} || $self->_build_log);
-  return Mojo::Server::Prefork->new(
-    app      => $app,
-    pid_file => delete $self->{pid_file} || path(File::Spec->tmpdir, path($0)->basename . '.pid'),
-    silent   => 1,
-    map { $self->{$_} ? ($_ => delete $self->{$_}) : () }
-      qw(graceful_timeout heartbeat_interval heartbeat_timeout listen workers),
-  );
+has _listen_handles => sub ($self) {
+  my $daemon = Mojo::Server::Daemon->new(listen => $self->listen, silent => 1);
+  my $loop   = $daemon->start->ioloop;
+  my @fh     = map { $loop->acceptor($_)->handle } @{$daemon->acceptors};
+  die "Did you forget to specify listen addresses?" unless @fh;
+  return \@fh;
 };
 
-sub check_pid       ($self)       { $self->_prefork->check_pid }
-sub ensure_pid_file ($self, $pid) { $self->_prefork->ensure_pid_file($pid) }
+sub check_pid ($self) {
+  return 0 unless my $pid = -r $self->pid_file && $self->pid_file->slurp;
+  chomp $pid;
+  return $pid if $pid && kill 0, $pid;
+  $self->pid_file->remove;
+  return 0;
+}
+
+sub ensure_pid_file ($self, $pid) {
+  return $self if -s (my $file = $self->pid_file);
+  $self->log->debug("Writing pid $pid to @{[$self->pid_file]}");
+  return $file->spurt("$pid\n")->chmod(0644) && $self;
+}
 
 sub reload ($self, $app) {
   return _errno(3) unless my $pid = $self->check_pid;
@@ -65,15 +73,16 @@ sub run ($self, $app) {
   local $SIG{TTOU} = sub { $self->workers($self->workers - 1) if $self->workers > 0 };
   local $SIG{USR2} = sub { $self->_start_hot_deployment };
 
+  $self->cleanup(1)->ensure_pid_file($self->{pid} = $$);
   $self->_create_worker_read_write_pipe;
-  $self->_create_listen_handles;
+  $self->_listen_handles;
 
   @$self{qw(pid pool running)} = ($$, {}, 1);
   $self->emit('start');
   $self->log->info("Manager for $app started");
   $self->_manage($app) while $self->{running};
   $self->log->info("Manager for $app stopped");
-  $self->pid_file->remove;
+  $self->cleanup(0)->pid_file->remove;
   return _errno(0);
 }
 
@@ -87,14 +96,6 @@ sub _build_log ($self) {
   my $level = $ENV{MOJO_LOG_LEVEL}
     || ($ENV{HARNESS_IS_VERBOSE} ? 'debug' : $ENV{HARNESS_ACTIVE} ? 'error' : 'info');
   return Mojo::Log->new(level => $level);
-}
-
-sub _create_listen_handles ($self) {
-  my ($prefork, $loop) = ($self->_prefork->start, $self->_prefork->ioloop);
-  my @fh = map { $loop->acceptor($_)->handle } @{$prefork->acceptors};
-  $prefork->stop;
-  $self->{listen_handles} = \@fh;
-  die "Did you forget to specify listen addresses?" unless @fh;
 }
 
 sub _create_worker_read_write_pipe ($self) {
@@ -165,7 +166,6 @@ sub _read_heartbeat ($self) {
   return unless $select->can_read(0.1);
   return unless $self->{worker_read}->sysread(my $chunk, 4194304);
 
-  my $pid  = $self->{pid};
   my $time = steady_time;
   while ($chunk =~ s/mojodctl:\d+:(\d+):(\w)\n//mg) {
     next unless my $w = $self->{pool}{$1};
@@ -189,7 +189,7 @@ sub _spawn ($self, $app) {
   $ENV{MOJODCTL_HEARTBEAT_INTERVAL} = $self->heartbeat_interval;
 
   my @args;
-  for my $fh ($self->{worker_write}, @{$self->{listen_handles}}) {
+  for my $fh ($self->{worker_write}, @{$self->_listen_handles}) {
 
     # Remove close-on-exec flag
     # https://stackoverflow.com/questions/14351147/perl-passing-an-open-socket-across-fork-exec
@@ -219,6 +219,11 @@ sub _waitpid ($self) {
     $self->log->debug("Worker $pid stopped");
     $self->emit(reap => $w);
   }
+}
+
+sub DESTROY ($self) {
+  my $path = $self->cleanup && $self->pid_file;
+  $path->remove if $path and -e $path;
 }
 
 1;
