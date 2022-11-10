@@ -290,16 +290,6 @@ code run, while new processes are deployed.
 Note that L<Mojo::Server::DaemonControl> is currently EXPERIMENTAL and it has
 not been tested in production yet. Feedback is more than welcome.
 
-=head1 ENVIRONMENT VARIABLES
-
-Some environment variables can be set in C<systemd> service files, while other
-can be useful to be read when initializing your web server.
-
-=head2 MOJODCTL_CONTROL_CLASS
-
-This environment variable will be set to L<Mojo::Server::DaemonControl::Worker>
-inside the worker process.
-
 =head1 SIGNALS
 
 =head2 INT, TERM
@@ -339,6 +329,14 @@ appended to C<$0> to illustrate which is new and which is old.
 
 L<Mojo::Server::DaemonControl> inherits all attributes from
 L<Mojo::EventEmitter> and implements the following ones.
+
+=head2 cleanup
+
+  $bool = $dctl->cleanup;
+  $dctl = $dctl->cleanup(1);
+
+Set this to true and L<Mojo::Server::DaemonControl> will remove L</pid_file>
+when this object goes out of scope.
 
 =head2 graceful_timeout
 

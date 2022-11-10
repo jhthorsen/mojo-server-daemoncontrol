@@ -1,5 +1,9 @@
 Revision history for perl distribution Mojo-Server-DaemonControl
 
+0.05 Not Released
+ - Add documentation for "cleanup" attribute
+ - Removed MOJODCTL_CONTROL_CLASS from documentation
+
 0.04 2022-11-10T18:59:25
  - Fix not rejecting connections when issuing hot deploy
  - Changed from using "reuse" to passing on "fd" to worker
