@@ -46,13 +46,13 @@ sub check_pid ($self) {
 
 sub ensure_pid_file ($self, $pid) {
   return $self if -s (my $file = $self->pid_file);
-  $self->log->debug("Writing pid $pid to @{[$self->pid_file]}");
+  $self->log->info("Writing pid $pid to $file");
   return $file->spurt("$pid\n")->chmod(0644) && $self;
 }
 
 sub reload ($self, $app) {
   return _errno(3) unless my $pid = $self->check_pid;
-  $self->log->info("Starting hot deployment of $pid.");
+  $self->log->info("Starting hot deployment of $pid");
   return kill(USR2 => $pid) ? _errno(0) : _errno(1);
 }
 
@@ -60,7 +60,7 @@ sub run ($self, $app) {
 
   # Cannot run two daemons at the same time
   if (my $pid = $self->check_pid) {
-    $self->log->info("Manager for $app is already running ($pid).");
+    $self->log->info("Manager for $app is already running ($pid)");
     return _errno(16);
   }
 
@@ -105,10 +105,10 @@ sub _create_worker_read_write_pipe ($self) {
 
 sub _errno ($n) { $! = $n }
 
-sub _kill ($self, $signal, $w, $reason = "with $signal") {
+sub _kill ($self, $signal, $w, $level, $reason) {
   return if $w->{$signal};
-  $w->{$signal} = kill($signal => $w->{pid}) // 0;
-  $self->log->info("Stopping worker $w->{pid} $reason == $w->{$signal}");
+  $w->{$signal} = kill($signal, $w->{pid}) || 0;
+  $self->log->$level("$reason (signalled=$w->{$signal})");
 }
 
 sub _manage ($self, $app) {
@@ -121,7 +121,7 @@ sub _manage ($self, $app) {
   my $pool = $self->{pool};
   if (my $signal = $self->{stop_signal}) {
     return delete @$self{qw(running stop_signal)} unless keys %$pool;    # Fully stopped
-    return map { $_->{$signal} || $self->_kill($signal => $_) } values %$pool;
+    return map { $_->{$signal} ||= kill $signal, $_->{pid} } values %$pool;
   }
 
   # Decrease workers on SIGTTOU
@@ -143,19 +143,18 @@ sub _manage ($self, $app) {
   # Start or stop workers based on worker health
   my $n_missing = $self->workers - (@healthy + @starting);
   if ($n_missing > 0) {
-    $self->log->info("Manager starting $n_missing workers (graceful=@graceful healthy=@healthy)");
+    $self->log->info("Manager starting $n_missing workers");
     $self->_spawn($app) while !$self->{stop_signal} && $n_missing-- > 0;
   }
   elsif (!@starting) {
-    $self->log->debug("Manager has graceful=@graceful healthy=@healthy");
     my $gt = $self->graceful_timeout;
     for my $pid (@graceful) {
       next unless my $w = $pool->{$pid};
       if ($gt && $w->{graceful} + $gt < $time) {
-        $self->_kill(KILL => $w, 'with no heartbeat');
+        $self->_kill(KILL => $w, warn => "Stopping worker $pid immediately");
       }
       else {
-        $self->_kill(QUIT => $w, 'gracefully');
+        $self->_kill(QUIT => $w, info => "Stopping worker $pid gracefully ($gt seconds)");
       }
     }
   }
@@ -180,7 +179,11 @@ sub _spawn ($self, $app) {
 
   # Parent
   die "Can't fork: $!" unless defined(my $pid = fork);
-  return $self->emit(spawn => $self->{pool}{$pid} = {pid => $pid, time => steady_time}) if $pid;
+  if ($pid) {
+    my $w = $self->{pool}{$pid} = {pid => $pid, time => steady_time};
+    $self->log->info("Worker $pid started");
+    return $self->emit(spawn => $w);
+  }
 
   # Child
   $ENV{MOJO_LOG_LEVEL} ||= $self->log->level;
@@ -216,7 +219,7 @@ sub _start_hot_deployment ($self) {
 sub _waitpid ($self) {
   while ((my $pid = waitpid -1, WNOHANG) > 0) {
     next unless my $w = delete $self->{pool}{$pid};
-    $self->log->debug("Worker $pid stopped");
+    $self->log->info("Worker $pid stopped");
     $self->emit(reap => $w);
   }
 }
