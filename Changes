@@ -1,5 +1,8 @@
 Revision history for perl distribution Mojo-Server-DaemonControl
 
+0.06 Not Released
+ - Fix EXE_FILES in Makefile.PL
+
 0.05 2022-11-10T20:13:53
  - Fix listening to https://
  - Add documentation for "cleanup" attribute
